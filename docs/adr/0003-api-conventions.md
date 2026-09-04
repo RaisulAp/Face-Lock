@@ -3,6 +3,28 @@
 **Status:** Terkunci di Fase 0, ditegakkan di semua fase berikutnya.
 **Rujukan:** [Plan/01-Fase0.md § 2.6](../../Plan/01-Fase0.md#26-scaffolding-faceclock-api-go), § 3.
 
+## Konfirmasi D2–D5
+
+Dikonfirmasi user pada sesi eksekusi Fase 0 (2026-09-04/05): rekomendasi
+[Plan/01-Fase0.md § 2.0](../../Plan/01-Fase0.md#20-keputusan-teknis-yang-harus-dikunci-di-fase-0)
+dipakai sebagai default, **tidak di-override**:
+
+| # | Keputusan | Final |
+|---|---|---|
+| D2 | HTTP router Go | **`go-chi/chi/v5`** — dipakai di `internal/httpx/router.go` |
+| D3 | Tooling migration | **`golang-migrate/migrate/v4`**, file SQL polos, dijalankan otomatis saat startup dev (`cmd/api/main.go`) dan lewat CLI manual (`make migrate-*`) |
+| D4 | Konvensi JSON | **`snake_case`** — lihat bagian terpisah di bawah |
+| D5 | Akses database | **`pgx/v5` + `pgxpool`**, **tanpa `sqlc` di Fase 0** — lihat catatan di bawah |
+
+**Deviasi D5 dari rekomendasi:** rekomendasi § 2.5 adalah `pgx/v5` + `sqlc`.
+Fase 0 hanya mengimplementasikan `pgx/v5` — `sqlc` belum di-setup karena
+belum ada satu query bisnis pun untuk digenerate (migration 000001 hanya
+mengaktifkan ekstensi, tidak membuat tabel). Menambahkan tooling `sqlc`
+sekarang berarti mengonfigurasi generator tanpa `queries/*.sql` apa pun
+untuk dijalankan terhadap — pekerjaan yang tidak menghasilkan apa-apa untuk
+diverifikasi. `sqlc` masuk di **Fase 1**, bersamaan dengan skema `users`/
+`employees`/`roles` dan query pertama yang sungguh membutuhkannya.
+
 ## Envelope response
 
 Sukses: `{"data": ...}`, opsional `"meta": {page, per_page, total, total_pages}`.
