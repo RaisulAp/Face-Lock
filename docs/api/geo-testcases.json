@@ -1,0 +1,4 @@
+{
+  "_note": "Kerangka kanonik dibuat di Fase 0 (REV-CTR-03). Kasus uji haversine diisi Fase 4 (Plan/05-Fase4.md § 7), dibaca oleh internal/geo (Go) dan lib/geo (TS) supaya jarak yang ditampilkan client sebelum kirim identik dengan yang dihitung server.",
+  "cases": []
+}

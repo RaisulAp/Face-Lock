@@ -1,0 +1,9 @@
+{
+  "$schema_note": "Kerangka kanonik dibuat di Fase 0 (REV-CTR-01). Namespace terpisah server_hints/client_coach sudah disiapkan sejak awal (REV-CTR-02) supaya Fase 7 tidak perlu merestrukturisasi berkas ini. Diisi Fase 2 (server_hints) dan Fase 7 (client_coach). Dibaca oleh internal/inference/hints.go (Go), lib/errors/hints.ts (TS), core/messages/hints.dart (Dart).",
+  "server_hints": {
+    "_note": "Kosakata TERTUTUP milik Fase 2 (Plan/03-Fase2.md § 2.5) — jangan ditambah dari client manapun. Kosong sampai Fase 2 mengisi 9 kalimat hint."
+  },
+  "client_coach": {
+    "_note": "Kalimat liveness khas mobile (Plan/08-Fase7.md), namespace terpisah dari server_hints supaya tidak mencemari kosakata tertutup. Kosong sampai Fase 7."
+  }
+}

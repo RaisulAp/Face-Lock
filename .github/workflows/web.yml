@@ -1,0 +1,34 @@
+name: web
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/faceclock-web/**"
+      - ".github/workflows/web.yml"
+  pull_request:
+    paths:
+      - "apps/faceclock-web/**"
+      - ".github/workflows/web.yml"
+
+defaults:
+  run:
+    working-directory: apps/faceclock-web
+
+jobs:
+  lint-typecheck-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: apps/faceclock-web/package-lock.json
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run format
+      - run: npm run build

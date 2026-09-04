@@ -1,0 +1,9 @@
+# Force LF in the repository regardless of a developer's core.autocrlf —
+# matches .editorconfig's end_of_line = lf.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.svg text eol=lf

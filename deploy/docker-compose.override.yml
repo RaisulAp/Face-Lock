@@ -1,0 +1,17 @@
+# Dev-only convenience layer. NOT applied by `make up` (which pins
+# `-f deploy/docker-compose.yml` explicitly — Compose only auto-merges an
+# override file when no -f flag is given at all). Apply it deliberately:
+#
+#   docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.override.yml up -d --build
+#
+# What it adds: bind-mounts so `faceclock-web` picks up local source edits
+# without a rebuild (the base compose file already works without this —
+# it bakes in a source snapshot at build time, which is enough to satisfy
+# Fase 0's DoD, just not pleasant for active development).
+
+services:
+  faceclock-web:
+    volumes:
+      - ../apps/faceclock-web/src:/app/src
+      - ../apps/faceclock-web/index.html:/app/index.html
+      - ../apps/faceclock-web/vite.config.ts:/app/vite.config.ts

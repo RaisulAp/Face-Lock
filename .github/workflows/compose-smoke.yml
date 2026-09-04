@@ -1,0 +1,57 @@
+name: compose-smoke
+
+# Deliberately no `paths:` filter — this validates the whole stack wired
+# together, which any of the three components can break.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  compose-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare .env
+        run: |
+          cp deploy/.env.example deploy/.env
+          sed -i 's/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=ci-password-only/' deploy/.env
+
+      - name: docker compose up
+        run: docker compose -f deploy/docker-compose.yml up -d --build
+
+      - name: Wait for all services healthy
+        run: |
+          for i in $(seq 1 30); do
+            unhealthy=$(docker compose -f deploy/docker-compose.yml ps --format json \
+              | python3 -c "import sys,json; rows=[json.loads(l) for l in sys.stdin if l.strip()]; print(sum(1 for r in rows if r.get('Health') not in ('healthy','')))")
+            if [ "$unhealthy" = "0" ]; then
+              echo "all services healthy"
+              break
+            fi
+            echo "waiting for services to become healthy... ($i/30)"
+            sleep 5
+          done
+          docker compose -f deploy/docker-compose.yml ps
+
+      - name: curl /readyz
+        run: |
+          status=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/readyz)
+          echo "status: $status"
+          test "$status" = "200"
+
+      - name: Verify Postgres extensions
+        run: |
+          docker compose -f deploy/docker-compose.yml exec -T postgres \
+            psql -U faceclock -d faceclock -tAc \
+            "SELECT count(*) FROM pg_extension WHERE extname IN ('vector','citext','pgcrypto');" \
+            | grep -q '^3$'
+
+      - name: Logs on failure
+        if: failure()
+        run: docker compose -f deploy/docker-compose.yml logs
+
+      - name: docker compose down
+        if: always()
+        run: docker compose -f deploy/docker-compose.yml down -v
