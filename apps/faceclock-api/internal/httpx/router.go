@@ -66,7 +66,7 @@ func NewRouter(deps RouterDeps) http.Handler {
 // the middleware slot works, not to tune production traffic shaping (that
 // happens per-route starting Fase 1, e.g. login attempts).
 const (
-	defaultRateLimit      = 300
+	defaultRateLimit       = 300
 	defaultRateLimitWindow = time.Minute
 )
 

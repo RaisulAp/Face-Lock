@@ -30,7 +30,8 @@ def embed() -> Response:
         content={
             "error": {
                 "code": "NOT_IMPLEMENTED",
-                "message": "faceclock-inference is running the Fase 0 stub — real embedding arrives in Fase 2",
+                "message": "faceclock-inference is running the Fase 0 stub — "
+                "real embedding arrives in Fase 2",
                 "request_id": "stub",
             }
         },

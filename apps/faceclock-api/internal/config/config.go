@@ -11,9 +11,9 @@ import (
 
 // Config holds every environment-derived setting the service needs at startup.
 type Config struct {
-	AppEnv       string // development | staging | production
-	AppPort      string
-	LogLevel     string // debug | info | warn | error
+	AppEnv   string // development | staging | production
+	AppPort  string
+	LogLevel string // debug | info | warn | error
 
 	DatabaseURL      string
 	DatabaseMaxConns int32

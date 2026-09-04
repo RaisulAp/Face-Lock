@@ -6,16 +6,27 @@ import type { ApiErrorCode, ApiFieldError, ErrorEnvelope, SuccessEnvelope } from
 // (Plan/01-Fase0.md § 2.6: "message boleh dibaca manusia, code yang dipakai
 // program").
 export class ApiError extends Error {
+  status: number;
+  code: ApiErrorCode | (string & {});
+  details?: ApiFieldError[];
+  requestId?: string;
+  extra?: Record<string, unknown>;
+
   constructor(
-    readonly status: number,
-    readonly code: ApiErrorCode | (string & {}),
-    readonly message: string,
-    readonly details?: ApiFieldError[],
-    readonly requestId?: string,
-    readonly extra?: Record<string, unknown>,
+    status: number,
+    code: ApiErrorCode | (string & {}),
+    message: string,
+    details?: ApiFieldError[],
+    requestId?: string,
+    extra?: Record<string, unknown>,
   ) {
     super(message);
     this.name = "ApiError";
+    this.status = status;
+    this.code = code;
+    this.details = details;
+    this.requestId = requestId;
+    this.extra = extra;
   }
 }
 

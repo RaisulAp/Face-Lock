@@ -28,10 +28,10 @@ type errorEnvelope struct {
 }
 
 type errorBody struct {
-	Code      ErrorCode    `json:"code"`
-	Message   string       `json:"message"`
-	Details   []FieldError `json:"details,omitempty"`
-	RequestID string       `json:"request_id"`
+	Code      ErrorCode      `json:"code"`
+	Message   string         `json:"message"`
+	Details   []FieldError   `json:"details,omitempty"`
+	RequestID string         `json:"request_id"`
 	Extra     map[string]any `json:"-"` // merged flat into the JSON object by MarshalJSON below
 }
 
