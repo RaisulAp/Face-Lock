@@ -20,13 +20,21 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
 
+	"github.com/faceclock/faceclock/apps/faceclock-api/internal/audit"
+	"github.com/faceclock/faceclock/apps/faceclock-api/internal/auth"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/config"
+	"github.com/faceclock/faceclock/apps/faceclock-api/internal/employee"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/health"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/httpx"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/inference"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/platform/logger"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/platform/postgres"
+	"github.com/faceclock/faceclock/apps/faceclock-api/internal/rbac"
+	"github.com/faceclock/faceclock/apps/faceclock-api/internal/role"
+	"github.com/faceclock/faceclock/apps/faceclock-api/internal/seeder"
+	"github.com/faceclock/faceclock/apps/faceclock-api/internal/settings"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/storage"
+	"github.com/faceclock/faceclock/apps/faceclock-api/internal/user"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/version"
 )
 
@@ -62,6 +70,15 @@ func main() {
 			log.Error("migration failed", slog.String("error", err.Error()))
 			os.Exit(1)
 		}
+		if err := seeder.Run(ctx, pool, seeder.Options{
+			AppEnv:            cfg.AppEnv,
+			SeedAdminEmail:    os.Getenv("SEED_ADMIN_EMAIL"),
+			SeedAdminPassword: os.Getenv("SEED_ADMIN_PASSWORD"),
+			Logger:            log,
+		}); err != nil {
+			log.Error("seeder failed", slog.String("error", err.Error()))
+			os.Exit(1)
+		}
 	}
 
 	store, err := storage.NewLocalStore(cfg.StorageLocalPath)
@@ -75,6 +92,52 @@ func main() {
 
 	healthHandler := &health.Handler{DB: pool, Inference: inferenceClient}
 
+	auditRecorder := audit.NewRecorder(pool)
+
+	settingsSvc := settings.NewService(pool)
+	settingsHandler := settings.NewHandler(settingsSvc, auditRecorder)
+
+	rbacCache := rbac.NewCache(30 * time.Second)
+	rbacSvc := rbac.NewService(pool, rbacCache)
+
+	tokenMgr, err := auth.NewTokenManager(cfg.JWTSecret, cfg.JWTAccessTTL)
+	if err != nil {
+		log.Error("could not initialize token manager", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+
+	authSvc := auth.NewService(pool, cfg, tokenMgr, settingsSvc, rbacSvc, auditRecorder)
+	authHandler := auth.NewHandler(authSvc, auditRecorder)
+	authMw := auth.Authenticate(tokenMgr, rbacSvc, pool)
+
+	empSvc := employee.NewService(pool)
+	empHandler := employee.NewHandler(empSvc, auditRecorder)
+
+	userSvc := user.NewService(pool, rbacSvc)
+	userHandler := user.NewHandler(userSvc, auditRecorder)
+
+	roleSvc := role.NewService(pool, rbacSvc)
+	roleHandler := role.NewHandler(roleSvc, auditRecorder)
+
+	auditHandler := audit.NewHandler(auditRecorder)
+
+	// Housekeeping job for expired refresh tokens (§ 3.7)
+	go func() {
+		ticker := time.NewTicker(24 * time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				_, err := pool.Exec(context.Background(), "DELETE FROM refresh_tokens WHERE expires_at < NOW() - INTERVAL '30 days'")
+				if err != nil {
+					log.Warn("cleaning expired refresh tokens", slog.String("error", err.Error()))
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
 	router := httpx.NewRouter(httpx.RouterDeps{
 		Logger:             log,
 		CORSAllowedOrigins: cfg.CORSAllowedOrigins,
@@ -83,6 +146,44 @@ func main() {
 		HealthzHandler:     healthHandler.Healthz,
 		ReadyzHandler:      healthHandler.Readyz,
 		VersionHandler:     version.Handler,
+
+		AuthMiddleware:    authMw,
+		RBACMiddleware:    rbac.RequirePermission,
+		RBACAnyMiddleware: rbac.RequireAnyPermission,
+
+		Handlers: httpx.Handlers{
+			AuthLogin:             authHandler.Login,
+			AuthRefresh:           authHandler.Refresh,
+			AuthLogout:            authHandler.Logout,
+			AuthLogoutAll:         authHandler.RevokeAll,
+			AuthGetMe:             authHandler.GetMe,
+			AuthChangePassword:    authHandler.ChangePassword,
+			EmployeeList:          empHandler.List,
+			EmployeeCreate:        empHandler.Create,
+			EmployeeGetMe:         empHandler.GetMe,
+			EmployeeGetByID:       empHandler.GetByID,
+			EmployeeUpdate:        empHandler.Update,
+			EmployeeDelete:        empHandler.Delete,
+			UserList:              userHandler.List,
+			UserCreate:            userHandler.Create,
+			UserGetByID:           userHandler.GetByID,
+			UserUpdate:            userHandler.Update,
+			UserDelete:            userHandler.Delete,
+			UserUpdateStatus:      userHandler.UpdateStatus,
+			UserAssignRoles:       userHandler.AssignRoles,
+			UserResetPassword:     userHandler.ResetPassword,
+			RoleList:              roleHandler.ListRoles,
+			RoleCreate:            roleHandler.CreateRole,
+			RoleGetByID:           roleHandler.GetRoleByID,
+			RoleUpdate:            roleHandler.UpdateRole,
+			RoleDelete:            roleHandler.DeleteRole,
+			RoleAssignPermissions: roleHandler.AssignPermissions,
+			PermissionList:        roleHandler.ListPermissions,
+			SettingsList:          settingsHandler.List,
+			SettingsGetByKey:      settingsHandler.GetByKey,
+			SettingsUpdate:        settingsHandler.Update,
+			AuditQuery:            auditHandler.List,
+		},
 	})
 
 	server := &http.Server{

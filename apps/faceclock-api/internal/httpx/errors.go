@@ -28,6 +28,54 @@ const (
 	CodeUpstreamError      ErrorCode = "UPSTREAM_ERROR"
 	CodeServiceUnavailable ErrorCode = "SERVICE_UNAVAILABLE"
 	CodeUpstreamTimeout    ErrorCode = "UPSTREAM_TIMEOUT"
+
+	// Fase 1 additions (Plan/02-Fase1.md § 4 & REV-AUTH-02)
+	CodeInvalidCredentials     ErrorCode = "INVALID_CREDENTIALS"
+	CodeInvalidRefreshToken    ErrorCode = "INVALID_REFRESH_TOKEN"
+	CodeRefreshTokenReused     ErrorCode = "REFRESH_TOKEN_REUSED"
+	CodeEmployeeNumberTaken    ErrorCode = "EMPLOYEE_NUMBER_TAKEN"
+	CodeEmployeeHasActiveUser  ErrorCode = "EMPLOYEE_HAS_ACTIVE_USER"
+	CodeEmailTaken             ErrorCode = "EMAIL_TAKEN"
+	CodeEmployeeAlreadyHasUser ErrorCode = "EMPLOYEE_ALREADY_HAS_USER"
+	CodeRoleNameTaken          ErrorCode = "ROLE_NAME_TAKEN"
+	CodeRoleInUse              ErrorCode = "ROLE_IN_USE"
+	CodeSystemRoleImmutable    ErrorCode = "SYSTEM_ROLE_IMMUTABLE"
+	CodeRoleEscalationDenied   ErrorCode = "ROLE_ESCALATION_DENIED"
+	CodeLastSuperAdmin         ErrorCode = "LAST_SUPER_ADMIN"
+	CodeCSRFHeaderMissing      ErrorCode = "CSRF_HEADER_MISSING"
+	CodeCSRFUntrustedOrigin    ErrorCode = "CSRF_UNTRUSTED_ORIGIN"
+
+	// Fase 3 additions (REV-ERR-01)
+	CodeConsentRequired              ErrorCode = "CONSENT_REQUIRED"
+	CodeConsentAlreadyGranted        ErrorCode = "CONSENT_ALREADY_GRANTED"
+	CodeConsentVersionOutdated       ErrorCode = "CONSENT_VERSION_OUTDATED"
+	CodeFaceNotUsable                ErrorCode = "FACE_NOT_USABLE"
+	CodeDuplicatePhoto               ErrorCode = "DUPLICATE_PHOTO"
+	CodeEnrollmentIncomplete         ErrorCode = "ENROLLMENT_INCOMPLETE"
+	CodeEnrollmentLimitReached       ErrorCode = "ENROLLMENT_LIMIT_REACHED"
+	CodeEnrollmentSessionExpired     ErrorCode = "ENROLLMENT_SESSION_EXPIRED"
+	CodeEnrollmentModelChanged       ErrorCode = "ENROLLMENT_MODEL_CHANGED"
+	CodeFaceBelongsToAnotherEmployee ErrorCode = "FACE_BELONGS_TO_ANOTHER_EMPLOYEE"
+	CodeReindexInProgress            ErrorCode = "REINDEX_IN_PROGRESS"
+	CodeAttendanceModeManual         ErrorCode = "ATTENDANCE_MODE_MANUAL"
+
+	// Fase 4 & 7 additions (REV-ERR-02, REV-ERR-03, REV-ERR-06)
+	CodeFaceNotEnrolled           ErrorCode = "FACE_NOT_ENROLLED"
+	CodeFaceNotMatched            ErrorCode = "FACE_NOT_MATCHED"
+	CodeOutsideGeofence           ErrorCode = "OUTSIDE_GEOFENCE"
+	CodeLocationRequired          ErrorCode = "LOCATION_REQUIRED"
+	CodeLocationInaccurate        ErrorCode = "LOCATION_INACCURATE"
+	CodeAlreadyCheckedIn          ErrorCode = "ALREADY_CHECKED_IN"
+	CodeAlreadyCheckedOut         ErrorCode = "ALREADY_CHECKED_OUT"
+	CodeCheckoutWithoutCheckin    ErrorCode = "CHECKOUT_WITHOUT_CHECKIN"
+	CodeCheckoutTooSoon           ErrorCode = "CHECKOUT_TOO_SOON"
+	CodeAttendanceAlreadyReviewed ErrorCode = "ATTENDANCE_ALREADY_REVIEWED"
+	CodeSelfReviewDenied          ErrorCode = "SELF_REVIEW_DENIED"
+	CodeEmployeeInactive          ErrorCode = "EMPLOYEE_INACTIVE"
+	CodeTooManyFailedAttempts     ErrorCode = "TOO_MANY_FAILED_ATTEMPTS"
+	CodeAttendanceNotConfigured   ErrorCode = "ATTENDANCE_NOT_CONFIGURED"
+	CodeFaceServiceNotConfigured  ErrorCode = "FACE_SERVICE_NOT_CONFIGURED"
+	CodeLivenessRequired          ErrorCode = "LIVENESS_REQUIRED"
 )
 
 // codeStatus maps every known code to its HTTP status. Kept as a single
@@ -47,6 +95,54 @@ var codeStatus = map[ErrorCode]int{
 	CodeUpstreamError:      http.StatusBadGateway,
 	CodeServiceUnavailable: http.StatusServiceUnavailable,
 	CodeUpstreamTimeout:    http.StatusGatewayTimeout,
+
+	// Fase 1 additions
+	CodeInvalidCredentials:     http.StatusUnauthorized,
+	CodeInvalidRefreshToken:    http.StatusUnauthorized,
+	CodeRefreshTokenReused:     http.StatusUnauthorized,
+	CodeEmployeeNumberTaken:    http.StatusConflict,
+	CodeEmployeeHasActiveUser:  http.StatusConflict,
+	CodeEmailTaken:             http.StatusConflict,
+	CodeEmployeeAlreadyHasUser: http.StatusConflict,
+	CodeRoleNameTaken:          http.StatusConflict,
+	CodeRoleInUse:              http.StatusConflict,
+	CodeSystemRoleImmutable:    http.StatusForbidden,
+	CodeRoleEscalationDenied:   http.StatusForbidden,
+	CodeLastSuperAdmin:         http.StatusConflict,
+	CodeCSRFHeaderMissing:      http.StatusForbidden,
+	CodeCSRFUntrustedOrigin:    http.StatusForbidden,
+
+	// Fase 3 additions
+	CodeConsentRequired:              http.StatusForbidden,
+	CodeConsentAlreadyGranted:        http.StatusConflict,
+	CodeConsentVersionOutdated:       http.StatusConflict,
+	CodeFaceNotUsable:                http.StatusUnprocessableEntity,
+	CodeDuplicatePhoto:               http.StatusConflict,
+	CodeEnrollmentIncomplete:         http.StatusUnprocessableEntity,
+	CodeEnrollmentLimitReached:       http.StatusConflict,
+	CodeEnrollmentSessionExpired:     http.StatusConflict,
+	CodeEnrollmentModelChanged:       http.StatusConflict,
+	CodeFaceBelongsToAnotherEmployee: http.StatusConflict,
+	CodeReindexInProgress:            http.StatusConflict,
+	CodeAttendanceModeManual:         http.StatusUnprocessableEntity,
+
+	// Fase 4 & 7 additions
+	CodeFaceNotEnrolled:           http.StatusUnprocessableEntity,
+	CodeFaceNotMatched:            http.StatusUnprocessableEntity,
+	CodeOutsideGeofence:           http.StatusUnprocessableEntity,
+	CodeLocationRequired:          http.StatusUnprocessableEntity,
+	CodeLocationInaccurate:        http.StatusUnprocessableEntity,
+	CodeAlreadyCheckedIn:          http.StatusConflict,
+	CodeAlreadyCheckedOut:         http.StatusConflict,
+	CodeCheckoutWithoutCheckin:    http.StatusConflict,
+	CodeCheckoutTooSoon:           http.StatusConflict,
+	CodeAttendanceAlreadyReviewed: http.StatusConflict,
+	CodeSelfReviewDenied:          http.StatusForbidden,
+	CodeEmployeeInactive:          http.StatusForbidden,
+	CodeTooManyFailedAttempts:     http.StatusTooManyRequests,
+	CodeAttendanceNotConfigured:   http.StatusServiceUnavailable,
+	CodeFaceServiceNotConfigured:  http.StatusServiceUnavailable,
+	CodeLivenessRequired:          http.StatusUnprocessableEntity,
 }
 
 // StatusFor returns the HTTP status registered for code. Panics if code was

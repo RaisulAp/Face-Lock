@@ -30,9 +30,10 @@ type Config struct {
 	InferenceToken   string
 	InferenceTimeout time.Duration
 
-	// JWT* are read but only enforced as required starting Fase 1. Kept here
-	// now so the fail-fast validation rule (E1) has one place to grow into.
-	JWTSecret string
+	// JWT* configuration (Fase 1)
+	JWTSecret     string
+	JWTAccessTTL  time.Duration
+	JWTRefreshTTL time.Duration
 
 	Version   string
 	Commit    string
@@ -72,6 +73,24 @@ func Load() (*Config, error) {
 		Version:   getEnv("VERSION", "0.1.0"),
 		Commit:    getEnv("COMMIT", "unknown"),
 		BuildTime: getEnv("BUILD_TIME", "unknown"),
+	}
+
+	if cfg.JWTSecret == "" && cfg.AppEnv == "development" {
+		cfg.JWTSecret = "development-secret-key-minimum-32-characters-required"
+	}
+
+	accessTTLRaw := getEnv("JWT_ACCESS_TTL", "15m")
+	if accessDur, err := time.ParseDuration(accessTTLRaw); err == nil && accessDur > 0 {
+		cfg.JWTAccessTTL = accessDur
+	} else {
+		cfg.JWTAccessTTL = 15 * time.Minute
+	}
+
+	refreshTTLRaw := getEnv("JWT_REFRESH_TTL", "720h")
+	if refreshDur, err := time.ParseDuration(refreshTTLRaw); err == nil && refreshDur > 0 {
+		cfg.JWTRefreshTTL = refreshDur
+	} else {
+		cfg.JWTRefreshTTL = 30 * 24 * time.Hour
 	}
 
 	var missing []string

@@ -18,7 +18,10 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
       -X github.com/faceclock/faceclock/apps/faceclock-api/internal/version.Version=${VERSION} \
       -X github.com/faceclock/faceclock/apps/faceclock-api/internal/version.Commit=${COMMIT} \
       -X github.com/faceclock/faceclock/apps/faceclock-api/internal/version.BuildTime=${BUILD_TIME}" \
-    -o /out/faceclock-api ./cmd/api
+    -o /out/faceclock-api ./cmd/api && \
+    CGO_ENABLED=0 GOOS=linux go build \
+    -ldflags "-s -w" \
+    -o /out/seed ./cmd/seed
 
 FROM alpine:3.20 AS runtime
 RUN apk add --no-cache ca-certificates curl && \
@@ -28,6 +31,7 @@ RUN apk add --no-cache ca-certificates curl && \
 
 WORKDIR /app
 COPY --from=build /out/faceclock-api /app/faceclock-api
+COPY --from=build /out/seed /app/seed
 COPY --from=build /src/migrations /app/migrations
 
 USER faceclock

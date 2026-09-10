@@ -268,11 +268,16 @@ berikut **sudah disetujui** di dokumen sumbernya dan wajib dicatat di
 | ID | Revisi | Asal | Terdampak | Sifat | Status |
 |---|---|---|---|---|---|
 | **REV-AUTH-01** | **Grace window pada deteksi reuse refresh token.** Token dengan `used_at` dalam `auth.refresh_reuse_grace_seconds` **dan** yang anaknya belum terpakai **dan** family belum di-revoke → terbitkan ulang pasangan yang sama, **jangan** revoke family. Di luar itu, perilaku Fase 1 tidak berubah | Fase 7 § 2.5b, § 14 R3 | [Fase 1 § 2.5](02-Fase1.md#25-strategi-token), § 5.2 (alur rotasi); berlaku untuk web **dan** mobile | **Wajib** | ⬜ Belum dieksekusi |
+| **REV-AUTH-02** | **Full HttpOnly Cookie-Based Authentication dengan Anti-CSRF Shield.** Menggantikan pure Bearer token pada browser dengan `Set-Cookie` bertipe `HttpOnly`, `SameSite=Lax`, `Path=/` untuk `access_token` (15m) dan `Path=/api/v1/auth` untuk `refresh_token` (30d), `Secure` di non-dev. Dual-mode compatibility: `Authenticate` middleware memprioritaskan cookie dengan fallback mulus ke header `Authorization: Bearer <token>`, dan payload JSON tetap menyertakan token untuk mobile/CLI. Endpoint refresh membaca cookie secara otomatis dengan fallback ke request body. Anti-CSRF Shield memvalidasi custom header (`X-Requested-With: XMLHttpRequest` atau `X-CSRF-Token`) dan verifikasi `Origin` pada seluruh metode mutasi (`POST`, `PUT`, `PATCH`, `DELETE`). Penolakan mengembalikan HTTP 403 `CSRF_HEADER_MISSING` atau `CSRF_UNTRUSTED_ORIGIN`. | Task Directive Refactoring Auth Fase 1 (Arsitektur Keamanan Browser) | [Fase 1 § 2.5](02-Fase1.md#25-strategi-token), `internal/auth`, `internal/httpx`, `test/integration`, `docs/api/fase1-auth-rbac.md` | **Wajib** | ✅ Selesai dieksekusi & terverifikasi |
 
 > Ditemukan dari kasus mobile (response refresh hilang di sinyal lemah → app mengulang
 > dengan token lama → seluruh sesi dicabut permanen), tetapi **memperbaiki web juga**.
 > Sifat keamanan Fase 1 dipertahankan: token yang dicuri dan dipakai di luar 30 detik,
 > atau setelah anaknya terpakai, tetap memicu pencabutan family.
+>
+> **REV-AUTH-02** menutup kerentanan token storage di browser: token tidak lagi disimpan
+> di `localStorage`/`sessionStorage` yang rentan diekstraksi script XSS, melainkan dikelola
+> aman via `HttpOnly` cookies dengan mitigasi CSRF komprehensif.
 
 ### I. Perubahan infrastruktur & dependensi
 
@@ -559,6 +564,7 @@ yang HARUS sudah tercermin di kode sebelum fase itu dinyatakan selesai?*
 | Harus sudah ada | Kenapa di sini |
 |---|---|
 | **REV-AUTH-01 + REV-SET-08** — grace window reuse + `auth.refresh_reuse_grace_seconds` | ⛔ **Paling penting.** Alur rotasi refresh token ditulis di Fase 1. Menambahkannya belakangan berarti menulis ulang bagian paling sensitif keamanan setelah web dan mobile terlanjur bergantung pada perilaku lama |
+| **REV-AUTH-02** — Full HttpOnly Cookie-Based Authentication + Anti-CSRF Shield | ⛔ **Keamanan Browser.** Mencegah pencurian token via XSS dengan memindahkan token browser ke cookie `HttpOnly` (`SameSite=Lax`) dan melindungi seluruh endpoint mutasi dengan Anti-CSRF shield (`X-Requested-With`, `X-CSRF-Token`, & verifikasi `Origin`), dengan tetap mempertahankan kompatibilitas fallback `Authorization: Bearer` untuk non-browser client |
 | **REV-SET-04** — deskripsi `attendance.max_distance_meter` sudah memakai makna hasil rekonsiliasi | Seeder Fase 1 yang menuliskannya. Menyeed deskripsi yang sudah diketahui salah lalu meng-`UPDATE`-nya di Fase 4 adalah pekerjaan dua kali |
 | **REV-CONV-01** — `audit_logs.id` `bigint identity` | Tabel dibuat di sini |
 | **REV-DB-01** — `employees.attendance_mode` | Kolomnya milik tabel `employees`. Boleh tetap lewat migration 000013 (aditif, sesuai rencana Fase 3), **atau** dilipat ke 000002. Rekomendasi: pertahankan 000013 agar penomoran dokumen tetap cocok |
