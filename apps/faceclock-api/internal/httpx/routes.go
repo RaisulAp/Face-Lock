@@ -65,4 +65,9 @@ var RouteRegistry = map[string]RouteGuard{
 
 	// #31: Audit Logs Endpoint
 	"GET /api/v1/audit-logs": "audit.read",
+
+	// #32 - #34: Fase 2 Biometrics & Attendance Endpoints
+	"POST /api/v1/employees/{id}/face-enroll": "face.enroll_any|face.enroll_self",
+	"POST /api/v1/attendance/clock-in":        "attendance.checkin",
+	"POST /api/v1/attendance/clock-out":       "attendance.checkin",
 }

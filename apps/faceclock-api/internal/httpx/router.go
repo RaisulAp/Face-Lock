@@ -55,6 +55,11 @@ type Handlers struct {
 
 	// Audit Logs
 	AuditQuery http.HandlerFunc
+
+	// Fase 2: Biometrics & Attendance
+	EmployeeFaceEnroll http.HandlerFunc
+	AttendanceClockIn  http.HandlerFunc
+	AttendanceClockOut http.HandlerFunc
 }
 
 // RouterDeps is every dependency the router needs to wire the middleware
@@ -239,6 +244,17 @@ func mountAPIv1(r chi.Router, deps RouterDeps) {
 			// Audit Logs
 			if deps.Handlers.AuditQuery != nil {
 				r.With(rbacGuard(deps, "audit.read")).Get("/audit-logs", deps.Handlers.AuditQuery)
+			}
+
+			// Fase 2: Face Biometrics & Attendance
+			if deps.Handlers.EmployeeFaceEnroll != nil {
+				r.With(rbacAnyGuard(deps, "face.enroll_any", "face.enroll_self")).Post("/employees/{id}/face-enroll", deps.Handlers.EmployeeFaceEnroll)
+			}
+			if deps.Handlers.AttendanceClockIn != nil {
+				r.With(rbacGuard(deps, "attendance.checkin")).Post("/attendance/clock-in", deps.Handlers.AttendanceClockIn)
+			}
+			if deps.Handlers.AttendanceClockOut != nil {
+				r.With(rbacGuard(deps, "attendance.checkin")).Post("/attendance/clock-out", deps.Handlers.AttendanceClockOut)
 			}
 		})
 	})

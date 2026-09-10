@@ -10,8 +10,10 @@ import (
 	"time"
 
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/audit"
+	"github.com/faceclock/faceclock/apps/faceclock-api/internal/face"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/httpx"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/rbac"
+	"github.com/faceclock/faceclock/apps/faceclock-api/internal/storage"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -48,7 +50,9 @@ type Filter struct {
 
 // Service provides employee operations.
 type Service struct {
-	db *pgxpool.Pool
+	db         *pgxpool.Pool
+	faceEngine face.FaceEngine
+	store      storage.Store
 }
 
 // NewService creates a new employee service.

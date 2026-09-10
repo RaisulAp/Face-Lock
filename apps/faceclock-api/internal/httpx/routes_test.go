@@ -75,6 +75,9 @@ func TestAllRoutesHaveGuards(t *testing.T) {
 			SettingsGetByKey:      dummyHandler,
 			SettingsUpdate:        dummyHandler,
 			AuditQuery:            dummyHandler,
+			EmployeeFaceEnroll:    dummyHandler,
+			AttendanceClockIn:     dummyHandler,
+			AttendanceClockOut:    dummyHandler,
 		},
 	}
 
@@ -131,9 +134,9 @@ func TestAllRoutesHaveGuards(t *testing.T) {
 		}
 	}
 
-	// 4. Validate exact count of Fase 0 + Fase 1 routes.
-	// Total expected: 3 (base) + 31 (API v1) = 34 routes
-	expectedCount := 34
+	// 4. Validate exact count of Fase 0 + Fase 1 + Fase 2 routes.
+	// Total expected: 3 (base) + 31 (Fase 1 API v1) + 3 (Fase 2 API v1) = 37 routes in registry
+	expectedCount := 37
 	if len(httpx.RouteRegistry) != expectedCount {
 		t.Errorf("expected %d routes in registry, got %d", expectedCount, len(httpx.RouteRegistry))
 	}

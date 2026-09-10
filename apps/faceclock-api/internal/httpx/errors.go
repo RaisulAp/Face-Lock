@@ -62,6 +62,7 @@ const (
 	// Fase 4 & 7 additions (REV-ERR-02, REV-ERR-03, REV-ERR-06)
 	CodeFaceNotEnrolled           ErrorCode = "FACE_NOT_ENROLLED"
 	CodeFaceNotMatched            ErrorCode = "FACE_NOT_MATCHED"
+	CodeFaceMismatch              ErrorCode = "FACE_MISMATCH"
 	CodeOutsideGeofence           ErrorCode = "OUTSIDE_GEOFENCE"
 	CodeLocationRequired          ErrorCode = "LOCATION_REQUIRED"
 	CodeLocationInaccurate        ErrorCode = "LOCATION_INACCURATE"
@@ -129,6 +130,7 @@ var codeStatus = map[ErrorCode]int{
 	// Fase 4 & 7 additions
 	CodeFaceNotEnrolled:           http.StatusUnprocessableEntity,
 	CodeFaceNotMatched:            http.StatusUnprocessableEntity,
+	CodeFaceMismatch:              http.StatusUnprocessableEntity,
 	CodeOutsideGeofence:           http.StatusUnprocessableEntity,
 	CodeLocationRequired:          http.StatusUnprocessableEntity,
 	CodeLocationInaccurate:        http.StatusUnprocessableEntity,

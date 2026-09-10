@@ -14,10 +14,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/faceclock/faceclock/apps/faceclock-api/internal/attendance"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/audit"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/auth"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/config"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/employee"
+	"github.com/faceclock/faceclock/apps/faceclock-api/internal/face"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/health"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/httpx"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/platform/logger"
@@ -25,6 +27,7 @@ import (
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/role"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/seeder"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/settings"
+	"github.com/faceclock/faceclock/apps/faceclock-api/internal/storage"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/user"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/version"
 	"github.com/google/uuid"
@@ -32,17 +35,20 @@ import (
 )
 
 type TestApp struct {
-	Pool        *pgxpool.Pool
-	Router      http.Handler
-	Config      *config.Config
-	TokenMgr    *auth.TokenManager
-	AuthSvc     *auth.Service
-	RBACSvc     *rbac.Service
-	UserSvc     *user.Service
-	EmployeeSvc *employee.Service
-	RoleSvc     *role.Service
-	SettingsSvc *settings.Service
-	AuditRec    *audit.Recorder
+	Pool          *pgxpool.Pool
+	Router        http.Handler
+	Config        *config.Config
+	TokenMgr      *auth.TokenManager
+	AuthSvc       *auth.Service
+	RBACSvc       *rbac.Service
+	UserSvc       *user.Service
+	EmployeeSvc   *employee.Service
+	AttendanceSvc *attendance.Service
+	FaceEngine    *face.MockEngine
+	Store         storage.Store
+	RoleSvc       *role.Service
+	SettingsSvc   *settings.Service
+	AuditRec      *audit.Recorder
 }
 
 func SetupTestApp(t *testing.T) *TestApp {
@@ -101,7 +107,19 @@ func SetupTestApp(t *testing.T) *TestApp {
 	auditRec := audit.NewRecorder(pool)
 	settingsSvc := settings.NewService(pool)
 	authSvc := auth.NewService(pool, cfg, tokenMgr, settingsSvc, rbacSvc, auditRec)
+
+	store, err := storage.NewLocalStore(cfg.StorageLocalPath)
+	if err != nil {
+		t.Fatalf("failed to init local store: %v", err)
+	}
+	mockFaceEngine := face.NewMockEngine()
+
 	empSvc := employee.NewService(pool)
+	empSvc.SetFaceBiometrics(mockFaceEngine, store)
+
+	attendanceSvc := attendance.NewService(pool, mockFaceEngine, store)
+	attendanceHandler := attendance.NewHandler(attendanceSvc, auditRec)
+
 	userSvc := user.NewService(pool, rbacSvc)
 	roleSvc := role.NewService(pool, rbacSvc)
 
@@ -159,21 +177,27 @@ func SetupTestApp(t *testing.T) *TestApp {
 			SettingsGetByKey:      settingsHandler.GetByKey,
 			SettingsUpdate:        settingsHandler.Update,
 			AuditQuery:            auditHandler.List,
+			EmployeeFaceEnroll:    empHandler.FaceEnroll,
+			AttendanceClockIn:     attendanceHandler.ClockIn,
+			AttendanceClockOut:    attendanceHandler.ClockOut,
 		},
 	})
 
 	return &TestApp{
-		Pool:        pool,
-		Router:      router,
-		Config:      cfg,
-		TokenMgr:    tokenMgr,
-		AuthSvc:     authSvc,
-		RBACSvc:     rbacSvc,
-		UserSvc:     userSvc,
-		EmployeeSvc: empSvc,
-		RoleSvc:     roleSvc,
-		SettingsSvc: settingsSvc,
-		AuditRec:    auditRec,
+		Pool:          pool,
+		Router:        router,
+		Config:        cfg,
+		TokenMgr:      tokenMgr,
+		AuthSvc:       authSvc,
+		RBACSvc:       rbacSvc,
+		UserSvc:       userSvc,
+		EmployeeSvc:   empSvc,
+		AttendanceSvc: attendanceSvc,
+		FaceEngine:    mockFaceEngine,
+		Store:         store,
+		RoleSvc:       roleSvc,
+		SettingsSvc:   settingsSvc,
+		AuditRec:      auditRec,
 	}
 }
 
@@ -197,20 +221,21 @@ func (app *TestApp) EnsureUserWithRole(t *testing.T, roleName string) *UserWithT
 
 	// Create a corresponding employee if role is employee or admin
 	var empID *uuid.UUID
-	randSuffix := time.Now().UnixNano()
-	empNum := fmt.Sprintf("EMP-TEST-%d", randSuffix%1000000)
+	uSuffix := uuid.New().String()[:8]
+	empNum := fmt.Sprintf("EMP-%s", uSuffix)
 
 	var createdEmpID uuid.UUID
 	err = app.Pool.QueryRow(ctx, `
 		INSERT INTO employees (employee_number, full_name, department, email, employment_status)
 		VALUES ($1, $2, 'Testing', $3, 'active')
 		RETURNING id
-	`, empNum, fmt.Sprintf("Test User %s", roleName), fmt.Sprintf("user_%s_%d@faceclock.local", roleName, randSuffix)).Scan(&createdEmpID)
-	if err == nil {
-		empID = &createdEmpID
+	`, empNum, fmt.Sprintf("Test User %s", roleName), fmt.Sprintf("user_%s_%s@faceclock.local", roleName, uSuffix)).Scan(&createdEmpID)
+	if err != nil {
+		t.Fatalf("failed creating employee in EnsureUserWithRole: %v", err)
 	}
+	empID = &createdEmpID
 
-	email := fmt.Sprintf("%s_%d@faceclock.local", roleName, randSuffix)
+	email := fmt.Sprintf("%s_%s@faceclock.local", roleName, uSuffix)
 	passwordHash, err := auth.HashPassword("TestPass123!")
 	if err != nil {
 		t.Fatalf("hash password failed: %v", err)

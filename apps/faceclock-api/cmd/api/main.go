@@ -20,10 +20,12 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
 
+	"github.com/faceclock/faceclock/apps/faceclock-api/internal/attendance"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/audit"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/auth"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/config"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/employee"
+	"github.com/faceclock/faceclock/apps/faceclock-api/internal/face"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/health"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/httpx"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/inference"
@@ -86,7 +88,8 @@ func main() {
 		log.Error("could not initialize storage", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
-	_ = store // wired into handlers starting Fase 3; kept here so main.go already proves it constructs.
+
+	faceEngine := face.NewRESTEngine(cfg.InferenceBaseURL, cfg.InferenceToken, "buffalo_l", face.DefaultCosineThreshold, cfg.InferenceTimeout)
 
 	inferenceClient := inference.New(cfg.InferenceBaseURL, cfg.InferenceToken, cfg.InferenceTimeout)
 
@@ -111,7 +114,11 @@ func main() {
 	authMw := auth.Authenticate(tokenMgr, rbacSvc, pool)
 
 	empSvc := employee.NewService(pool)
+	empSvc.SetFaceBiometrics(faceEngine, store)
 	empHandler := employee.NewHandler(empSvc, auditRecorder)
+
+	attendanceSvc := attendance.NewService(pool, faceEngine, store)
+	attendanceHandler := attendance.NewHandler(attendanceSvc, auditRecorder)
 
 	userSvc := user.NewService(pool, rbacSvc)
 	userHandler := user.NewHandler(userSvc, auditRecorder)
@@ -183,6 +190,9 @@ func main() {
 			SettingsGetByKey:      settingsHandler.GetByKey,
 			SettingsUpdate:        settingsHandler.Update,
 			AuditQuery:            auditHandler.List,
+			EmployeeFaceEnroll:    empHandler.FaceEnroll,
+			AttendanceClockIn:     attendanceHandler.ClockIn,
+			AttendanceClockOut:    attendanceHandler.ClockOut,
 		},
 	})
 

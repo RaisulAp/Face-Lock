@@ -1,7 +1,51 @@
 {
   "$schema_note": "Kerangka kanonik dibuat di Fase 0 (REV-CTR-01). Namespace terpisah server_hints/client_coach sudah disiapkan sejak awal (REV-CTR-02) supaya Fase 7 tidak perlu merestrukturisasi berkas ini. Diisi Fase 2 (server_hints) dan Fase 7 (client_coach). Dibaca oleh internal/inference/hints.go (Go), lib/errors/hints.ts (TS), core/messages/hints.dart (Dart).",
   "server_hints": {
-    "_note": "Kosakata TERTUTUP milik Fase 2 (Plan/03-Fase2.md § 2.5) — jangan ditambah dari client manapun. Kosong sampai Fase 2 mengisi 9 kalimat hint."
+    "no_face": {
+      "meaning": "Tidak ada wajah terdeteksi",
+      "blocking": true,
+      "text": "Wajah tidak terdeteksi. Posisikan wajah di dalam bingkai."
+    },
+    "multiple_faces": {
+      "meaning": "Lebih dari satu wajah dalam frame",
+      "blocking": true,
+      "text": "Terdeteksi lebih dari satu wajah. Pastikan hanya Anda dalam bingkai."
+    },
+    "low_detection_confidence": {
+      "meaning": "det_score di bawah ambang",
+      "blocking": true,
+      "text": "Wajah kurang jelas. Hadapkan wajah lurus ke kamera."
+    },
+    "too_blurry": {
+      "meaning": "Variance of Laplacian rendah",
+      "blocking": true,
+      "text": "Foto buram. Tahan perangkat agar tidak bergerak."
+    },
+    "too_dark": {
+      "meaning": "Kecerahan crop wajah rendah",
+      "blocking": true,
+      "text": "Terlalu gelap. Cari tempat yang lebih terang."
+    },
+    "too_bright": {
+      "meaning": "Kecerahan terlalu tinggi / overexposed",
+      "blocking": true,
+      "text": "Terlalu terang. Hindari cahaya langsung dari belakang."
+    },
+    "face_too_small": {
+      "meaning": "Tinggi bbox / tinggi frame di bawah ambang",
+      "blocking": true,
+      "text": "Wajah terlalu jauh. Dekatkan wajah ke kamera."
+    },
+    "head_turned": {
+      "meaning": "Proxy yaw melebihi ambang",
+      "blocking": true,
+      "text": "Hadapkan wajah lurus ke kamera."
+    },
+    "head_tilted": {
+      "meaning": "Proxy pitch melebihi ambang",
+      "blocking": true,
+      "text": "Jangan menunduk atau mendongak."
+    }
   },
   "client_coach": {
     "_note": "Kalimat liveness khas mobile (Plan/08-Fase7.md), namespace terpisah dari server_hints supaya tidak mencemari kosakata tertutup. Kosong sampai Fase 7."
