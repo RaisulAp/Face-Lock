@@ -130,6 +130,9 @@ func (s *Service) GetPublic(ctx context.Context) ([]AppSetting, error) {
 
 // GetInt retrieves a numeric setting as integer with a default fallback.
 func (s *Service) GetInt(ctx context.Context, key string, defaultVal int) int {
+	if s == nil || s.db == nil {
+		return defaultVal
+	}
 	const q = `SELECT value FROM app_settings WHERE key = $1`
 	var rawVal []byte
 	if err := s.db.QueryRow(ctx, q, key).Scan(&rawVal); err != nil {
@@ -149,6 +152,77 @@ func (s *Service) GetInt(ctx context.Context, key string, defaultVal int) int {
 	}
 
 	return defaultVal
+}
+
+// GetBool retrieves a boolean setting with a default fallback.
+func (s *Service) GetBool(ctx context.Context, key string, defaultVal bool) bool {
+	if s == nil || s.db == nil {
+		return defaultVal
+	}
+	const q = `SELECT value FROM app_settings WHERE key = $1`
+	var rawVal []byte
+	if err := s.db.QueryRow(ctx, q, key).Scan(&rawVal); err != nil {
+		return defaultVal
+	}
+
+	var boolVal bool
+	if err := json.Unmarshal(rawVal, &boolVal); err == nil {
+		return boolVal
+	}
+
+	var strVal string
+	if err := json.Unmarshal(rawVal, &strVal); err == nil {
+		if b, err := strconv.ParseBool(strVal); err == nil {
+			return b
+		}
+	}
+
+	return defaultVal
+}
+
+// GetFloat retrieves a floating-point numeric setting with a default fallback.
+func (s *Service) GetFloat(ctx context.Context, key string, defaultVal float64) float64 {
+	if s == nil || s.db == nil {
+		return defaultVal
+	}
+	const q = `SELECT value FROM app_settings WHERE key = $1`
+	var rawVal []byte
+	if err := s.db.QueryRow(ctx, q, key).Scan(&rawVal); err != nil {
+		return defaultVal
+	}
+
+	var numVal float64
+	if err := json.Unmarshal(rawVal, &numVal); err == nil {
+		return numVal
+	}
+
+	var strVal string
+	if err := json.Unmarshal(rawVal, &strVal); err == nil {
+		if f, err := strconv.ParseFloat(strVal, 64); err == nil {
+			return f
+		}
+	}
+
+	return defaultVal
+}
+
+// GetString retrieves a string setting with a default fallback.
+func (s *Service) GetString(ctx context.Context, key string, defaultVal string) string {
+	if s == nil || s.db == nil {
+		return defaultVal
+	}
+	const q = `SELECT value FROM app_settings WHERE key = $1`
+	var rawVal []byte
+	if err := s.db.QueryRow(ctx, q, key).Scan(&rawVal); err != nil {
+		return defaultVal
+	}
+
+	var strVal string
+	if err := json.Unmarshal(rawVal, &strVal); err == nil {
+		return strVal
+	}
+
+	return string(rawVal)
 }
 
 // UpdateBatch updates a list of settings after validating types.
@@ -293,6 +367,30 @@ func validateSettingValue(key, valType string, v any) error {
 		case "face.similarity_threshold":
 			if num < 0.0 || num > 1.0 {
 				return httpx.NewAppError(httpx.CodeValidationError, "face.similarity_threshold must be between 0.0 and 1.0")
+			}
+		case "face.min_reference_photos":
+			if num < 1 || num > 5 {
+				return httpx.NewAppError(httpx.CodeValidationError, "face.min_reference_photos must be between 1 and 5")
+			}
+		case "face.max_reference_photos":
+			if num < 1 || num > 10 {
+				return httpx.NewAppError(httpx.CodeValidationError, "face.max_reference_photos must be between 1 and 10")
+			}
+		case "face.enrollment_session_ttl_minutes":
+			if num < 5 || num > 60 {
+				return httpx.NewAppError(httpx.CodeValidationError, "face.enrollment_session_ttl_minutes must be between 5 and 60")
+			}
+		case "face.min_quality_score":
+			if num < 0.0 || num > 1.0 {
+				return httpx.NewAppError(httpx.CodeValidationError, "face.min_quality_score must be between 0.0 and 1.0")
+			}
+		case "face.duplicate_threshold":
+			if num < 0.0 || num > 1.0 {
+				return httpx.NewAppError(httpx.CodeValidationError, "face.duplicate_threshold must be between 0.0 and 1.0")
+			}
+		case "face.retention_days_after_resign":
+			if num < 1 || num > 3650 {
+				return httpx.NewAppError(httpx.CodeValidationError, "face.retention_days_after_resign must be between 1 and 3650")
 			}
 		case "attendance.max_distance_meter":
 			if num < 10 || num > 10000 {

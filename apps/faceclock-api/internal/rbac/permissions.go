@@ -38,6 +38,7 @@ const (
 	PermFaceEnrollAny  = "face.enroll_any"
 	PermFaceReadAny    = "face.read_any"
 	PermFaceDeleteAny  = "face.delete_any"
+	PermFaceReindex    = "face.reindex"
 
 	// Attendance permissions
 	PermAttendanceCheckin  = "attendance.checkin"
@@ -90,6 +91,7 @@ var SystemPermissions = []PermissionDef{
 	{PermFaceEnrollAny, "Enroll wajah karyawan lain"},
 	{PermFaceReadAny, "Lihat referensi wajah siapa pun"},
 	{PermFaceDeleteAny, "Nonaktifkan referensi wajah siapa pun"},
+	{PermFaceReindex, "Menjalankan job regenerasi embedding saat model berganti"},
 
 	{PermAttendanceCheckin, "Melakukan check-in/out untuk diri sendiri"},
 	{PermAttendanceReadSelf, "Lihat riwayat absensi sendiri"},

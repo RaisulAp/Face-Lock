@@ -149,8 +149,8 @@ Kolom, tabel, dan CHECK yang **tidak ada** di draft awal
 
 | ID | Revisi | Asal | Terdampak | Sifat | Status |
 |---|---|---|---|---|---|
-| **REV-DB-01** | Kolom baru `employees.attendance_mode text NOT NULL DEFAULT 'face' CHECK (IN ('face','manual'))` — jalur sah bagi karyawan yang menolak consent | Fase 3 § 2.4d, § 3.3 | Tabel `employees` milik Fase 1 (migration 000002); ditambahkan lewat migration 000013 | Wajib | ⬜ Belum dieksekusi |
-| **REV-DB-02** | `face_references.photo_url` → **`photo_key`** (key object storage) + `photo_sha256`, `photo_bytes`, `photo_mime`, `photo_purged_at`. Tidak ada URL publik | Fase 3 § 2.2 (D14), § 3.4 | **Master Plan § 5** (draft model data), migration 000014 | Wajib | ⬜ Belum dieksekusi |
+| **REV-DB-01** | Kolom baru `employees.attendance_mode text NOT NULL DEFAULT 'face' CHECK (IN ('face','manual'))` — jalur sah bagi karyawan yang menolak consent | Fase 3 § 2.4d, § 3.3 | Tabel `employees` milik Fase 1 (migration 000002); ditambahkan lewat migration 000013 | Wajib | ✅ Selesai dieksekusi (Fase 3, migration 000013) |
+| **REV-DB-02** | `face_references.photo_url` → **`photo_key`** (key object storage) + `photo_sha256`, `photo_bytes`, `photo_mime`, `photo_purged_at`. Tidak ada URL publik | Fase 3 § 2.2 (D14), § 3.4 | **Master Plan § 5** (draft model data), migration 000014 | Wajib | ✅ Selesai dieksekusi (Fase 3, migration 000014) |
 | **REV-DB-03** | `attendances.photo_url` → **`photo_key`** + `photo_sha256`, `photo_bytes`, `photo_mime`, `photo_purged_at` | Fase 4 § 3.2 (turunan D14) | **Master Plan § 5**, migration 000019 | Wajib | ⬜ Belum dieksekusi |
 | **REV-DB-04** | Kolom liveness pada `attendances`: `liveness_passed boolean NULL`, `liveness_supported boolean NULL`, `liveness_method text NULL`, `liveness_challenges jsonb NOT NULL DEFAULT '[]'` | Fase 7 § 14 R4a | Migration 000019 (Fase 4) | **Wajib** | ⬜ Belum dieksekusi |
 | **REV-DB-05** | Kolom `attendances.location_is_mocked boolean NULL` (dari `Position.isMocked`, Android) | Fase 7 § 14 R5a | Migration 000019 (Fase 4); mengoreksi [Fase 4 E21](05-Fase4.md#63-lokasi) yang menyatakan mock location "tidak terdeteksi" | Direkomendasikan | ⬜ Belum dieksekusi |
@@ -191,12 +191,12 @@ Katalog awal: **13 kode** ([Fase 0 § 2.6](01-Fase0.md#26-scaffolding-faceclock-
 
 | ID | Revisi | Asal | Terdampak | Sifat | Status |
 |---|---|---|---|---|---|
-| **REV-ERR-01** | **+12 kode Fase 3**: `CONSENT_REQUIRED` (403), `CONSENT_ALREADY_GRANTED` (409), `CONSENT_VERSION_OUTDATED` (409), `FACE_NOT_USABLE` (422), `DUPLICATE_PHOTO` (409), `ENROLLMENT_INCOMPLETE` (422), `ENROLLMENT_LIMIT_REACHED` (409), `ENROLLMENT_SESSION_EXPIRED` (409), `ENROLLMENT_MODEL_CHANGED` (409), `FACE_BELONGS_TO_ANOTHER_EMPLOYEE` (409), `REINDEX_IN_PROGRESS` (409), `ATTENDANCE_MODE_MANUAL` (422) | Fase 3 § 2.9 | Fase 0 § 2.6; `internal/httpx/errors.go`; `lib/errors/codes.ts`; `core/network/error_codes.dart` | Wajib | ⬜ Belum dieksekusi |
+| **REV-ERR-01** | **+12 kode Fase 3**: `CONSENT_REQUIRED` (403), `CONSENT_ALREADY_GRANTED` (409), `CONSENT_VERSION_OUTDATED` (409), `FACE_NOT_USABLE` (422), `DUPLICATE_PHOTO` (409), `ENROLLMENT_INCOMPLETE` (422), `ENROLLMENT_LIMIT_REACHED` (409), `ENROLLMENT_SESSION_EXPIRED` (409), `ENROLLMENT_MODEL_CHANGED` (409), `FACE_BELONGS_TO_ANOTHER_EMPLOYEE` (409), `REINDEX_IN_PROGRESS` (409), `ATTENDANCE_MODE_MANUAL` (422) | Fase 3 § 2.9 | Fase 0 § 2.6; `internal/httpx/errors.go`; `lib/errors/codes.ts`; `core/network/error_codes.dart` | Wajib | ✅ Selesai dieksekusi (Fase 3) |
 | **REV-ERR-02** | **+14 kode Fase 4**: `FACE_NOT_ENROLLED` (422), `FACE_NOT_MATCHED` (422), `OUTSIDE_GEOFENCE` (422), `LOCATION_REQUIRED` (422), `LOCATION_INACCURATE` (422), `ALREADY_CHECKED_IN` (409), `ALREADY_CHECKED_OUT` (409), `CHECKOUT_WITHOUT_CHECKIN` (409), `CHECKOUT_TOO_SOON` (409), `ATTENDANCE_ALREADY_REVIEWED` (409), `SELF_REVIEW_DENIED` (403), `EMPLOYEE_INACTIVE` (403), `TOO_MANY_FAILED_ATTEMPTS` (429), `ATTENDANCE_NOT_CONFIGURED` (503, **dipersempit** — lihat REV-ERR-06) | Fase 4 § 2.10 | idem | Wajib | ⬜ Belum dieksekusi |
 | **REV-ERR-03** | **+1 kode Fase 7**: `LIVENESS_REQUIRED` — **HTTP 422**. Muncul hanya bila `attendance.liveness_policy='required'` dan `liveness_passed != true`. Response **wajib** menyertakan `can_fallback` (nilainya `attendance.fallback_enabled`) | Fase 7 § 14 R7 | Fase 0 § 2.6 | **Wajib** | ⬜ Belum dieksekusi |
-| **REV-ERR-04** | **Status HTTP 410 Gone** masuk katalog, dipakai khusus untuk foto yang sudah dihapus kebijakan retensi, dengan `code: "NOT_FOUND"` agar client lama tetap menanganinya | Fase 3 § 4.4; dipakai ulang Fase 4 § 6.5 E38 | Fase 0 § 2.6; `docs/adr/0003-api-conventions.md` | Wajib | ⬜ Belum dieksekusi |
+| **REV-ERR-04** | **Status HTTP 410 Gone** masuk katalog, dipakai khusus untuk foto yang sudah dihapus kebijakan retensi, dengan `code: "NOT_FOUND"` agar client lama tetap menanganinya | Fase 3 § 4.4; dipakai ulang Fase 4 § 6.5 E38 | Fase 0 § 2.6; `docs/adr/0003-api-conventions.md` | Wajib | ✅ Selesai dieksekusi (Fase 3) |
 | **REV-ERR-05** | **Cakupan field `can_fallback`.** Fase 4 § 4.2 hanya mencontohkannya pada `FACE_NOT_MATCHED`. Dinyatakan berlaku pada: `FACE_NOT_MATCHED`, `FACE_NOT_USABLE`, `FACE_NOT_ENROLLED`, `LIVENESS_REQUIRED`, `502 UPSTREAM_ERROR`, `504 UPSTREAM_TIMEOUT` | Fase 6 § 12 no. 2 → **diulang** Fase 7 § 14 R8 (masih terbuka) | Fase 4 § 4.2 | **Wajib** — tanpa ini client menduplikasi logika server | ⬜ Belum dieksekusi |
-| **REV-ERR-06** | **+1 kode baru**: `FACE_SERVICE_NOT_CONFIGURED` (503) — akar masalah "`face.model_version = 'unset'`, Fase 2 belum dikalibrasi". Dipakai bersama oleh `#38` (Fase 3), `#53`/`#54` (Fase 4), menggantikan `SERVICE_UNAVAILABLE` di `#38` dan mengeluarkan kondisi ini dari `ATTENDANCE_NOT_CONFIGURED` di `#53`/`#54` (yang sebelumnya menggabungkan dua akar masalah tak-terkait — lihat REV-ERR-02) | Resolusi K-04 (§ 4) | [Fase 3 § 2.9](04-Fase3.md#29-error-code-tambahan-registrasi-resmi-ke-katalog-fase-0) + § 4.3; [Fase 4 § 2.10](05-Fase4.md#210-error-code-tambahan-registrasi-resmi-ke-katalog-fase-0) + § 4.2; `internal/httpx/errors.go`; `lib/errors/codes.ts`; `core/network/error_codes.dart` | **Wajib** | ⬜ Belum dieksekusi |
+| **REV-ERR-06** | **+1 kode baru**: `FACE_SERVICE_NOT_CONFIGURED` (503) — akar masalah "`face.model_version = 'unset'`, Fase 2 belum dikalibrasi". Dipakai bersama oleh `#38` (Fase 3), `#53`/`#54` (Fase 4), menggantikan `SERVICE_UNAVAILABLE` di `#38` dan mengeluarkan kondisi ini dari `ATTENDANCE_NOT_CONFIGURED` di `#53`/`#54` (yang sebelumnya menggabungkan dua akar masalah tak-terkait — lihat REV-ERR-02) | Resolusi K-04 (§ 4) | [Fase 3 § 2.9](04-Fase3.md#29-error-code-tambahan-registrasi-resmi-ke-katalog-fase-0) + § 4.3; [Fase 4 § 2.10](05-Fase4.md#210-error-code-tambahan-registrasi-resmi-ke-katalog-fase-0) + § 4.2; `internal/httpx/errors.go`; `lib/errors/codes.ts`; `core/network/error_codes.dart` | **Wajib** | ✅ Selesai dieksekusi (Fase 3, didaftarkan & dipakai di #38) |
 
 > **Total katalog error setelah revisi: 41 kode** (13 + 12 + 14 + 1 + 1), ditambah
 > satu status HTTP baru (410). Angka ini **naik dari 40 menjadi 41** akibat resolusi
@@ -211,7 +211,7 @@ Katalog awal: **13 kode** ([Fase 0 § 2.6](01-Fase0.md#26-scaffolding-faceclock-
 
 | ID | Revisi | Asal | Terdampak | Sifat | Status |
 |---|---|---|---|---|---|
-| **REV-PERM-01** | **Permission baru `face.reindex`** + grant ke `super_admin` di migration yang sama (mengikuti aturan [Fase 1 § 2.3](02-Fase1.md#23-katalog-permission)). **Sengaja tidak** diberikan ke `admin` | Fase 3 § 3.8 | [Fase 1 § 2.3](02-Fase1.md#23-katalog-permission), § 2.4; migration 000017 | Wajib | ⬜ Belum dieksekusi |
+| **REV-PERM-01** | **Permission baru `face.reindex`** + grant ke `super_admin` di migration yang sama (mengikuti aturan [Fase 1 § 2.3](02-Fase1.md#23-katalog-permission)). **Sengaja tidak** diberikan ke `admin` | Fase 3 § 3.8 | [Fase 1 § 2.3](02-Fase1.md#23-katalog-permission), § 2.4; migration 000017 | Wajib | ✅ Selesai dieksekusi (Fase 3, migration 000017) |
 
 > **Hanya satu permission baru di seluruh proyek.** Fase 4, 5, 6, dan 7 tidak
 > menambah permission sama sekali — seluruh kebutuhan sudah tercakup katalog Fase 1,
@@ -224,7 +224,7 @@ Seed awal: **11 key** ([Fase 1 § 3.9](02-Fase1.md#39-app_settings--migration-00
 | ID | Revisi | Asal | Terdampak | Sifat | Status |
 |---|---|---|---|---|---|
 | **REV-SET-01** | **+10 key `face.*`**: `det_size`, `min_det_score`, `min_blur_var`, `min_brightness`, `max_brightness`, `min_face_ratio`, `max_abs_yaw`, `max_abs_pitch`, `max_image_bytes`, `accepted_mime_types`. Berstatus **salinan tampilan** — sumber kebenaran tetap env container inference | Fase 2 § 3.1 (inline, baru terkonsolidasi di sini) | Migration 000011 | Scope fase (dicatat untuk kelengkapan katalog) | ✅ Selesai dieksekusi (Fase 2, migration 000011) |
-| **REV-SET-02** | **+7 key `face.*`**: `max_reference_photos`, `enrollment_session_ttl_minutes`, `min_quality_score`, `duplicate_check_enabled`, `duplicate_threshold`, `retention_days_after_resign`, `consent_required` | Fase 3 § 3.8 | Migration 000017 | Wajib | ⬜ Belum dieksekusi |
+| **REV-SET-02** | **+7 key `face.*`**: `max_reference_photos`, `enrollment_session_ttl_minutes`, `min_quality_score`, `duplicate_check_enabled`, `duplicate_threshold`, `retention_days_after_resign`, `consent_required` | Fase 3 § 3.8 | Migration 000017 | Wajib | ✅ Selesai dieksekusi (Fase 3, migration 000017) |
 | **REV-SET-03** | **+15 key `attendance.*`**: `workday_cutoff_hour`, `fallback_enabled`, `outside_geofence_policy`, `missing_location_policy`, `max_gps_accuracy_meter`, `allow_checkout_without_checkin`, `min_minutes_between_checkin_checkout`, `require_face_for_checkout`, `checkout_without_face_status`, `allow_fallback_without_enrollment`, `max_note_length`, `max_failed_attempts_per_hour`, `photo_retention_days`, `attempt_retention_days`, `duplicate_photo_window_days` | Fase 4 § 3.5 | Migration 000021 | Wajib | ⬜ Belum dieksekusi |
 | **REV-SET-04** | **Rekonsiliasi makna `attendance.max_distance_meter`.** Fase 1 men-seed-nya sebagai radius geofence; sejak Fase 4 ia menjadi **batas atas + nilai default** `office_locations.radius_meter`. Radius efektif ditentukan per lokasi. Deskripsi baris di-`UPDATE` | Fase 4 § 2.1 (dinyatakan eksplisit sebagai "revisi kecil kontrak Fase 1") | [Fase 1 § 3.9](02-Fase1.md#39-app_settings--migration-000010); migration 000021 | Wajib | ⬜ Belum dieksekusi |
 | **REV-SET-05** | **+1 key** `attendance.export_max_rows` (default 100000) | Fase 5 § 2.1, § 12 no. 4 | Migration Fase 5 | Tambahan | ⬜ Belum dieksekusi |
@@ -240,7 +240,7 @@ Seed awal: **11 key** ([Fase 1 § 3.9](02-Fase1.md#39-app_settings--migration-00
 
 | ID | Revisi | Asal | Terdampak | Sifat | Status |
 |---|---|---|---|---|---|
-| **REV-MW-01** | **Slot baru `RequireConsent`** setelah `RequirePermission`. Urutannya bermakna: pihak yang tidak berhak sama sekali harus menerima `403 FORBIDDEN`, bukan `403 CONSENT_REQUIRED` yang membocorkan keberadaan karyawan | Fase 3 § 2.4b, § 5.3 | [Fase 0 § 2.6](01-Fase0.md#26-scaffolding-faceclock-api-go) — rantai middleware terkunci | Wajib | ⬜ Belum dieksekusi |
+| **REV-MW-01** | **Slot baru `RequireConsent`** setelah `RequirePermission`. Urutannya bermakna: pihak yang tidak berhak sama sekali harus menerima `403 FORBIDDEN`, bukan `403 CONSENT_REQUIRED` yang membocorkan keberadaan karyawan | Fase 3 § 2.4b, § 5.3 | [Fase 0 § 2.6](01-Fase0.md#26-scaffolding-faceclock-api-go) — rantai middleware terkunci | Wajib | ✅ Selesai dieksekusi (Fase 3, internal/httpx/middleware/consent.go) |
 
 Rantai final:
 
@@ -285,8 +285,8 @@ berikut **sudah disetujui** di dokumen sumbernya dan wajib dicatat di
 |---|---|---|---|---|---|
 | **REV-INF-01** | **HTTPS wajib untuk `faceclock-web`** di semua lingkungan selain `localhost`. `getUserMedia` dan Geolocation hanya tersedia di secure context — tanpa ini **tidak satu pun** fitur inti Fase 6 bisa diuji di perangkat nyata | Fase 5 § 12 no. 6 → **diulang** Fase 6 § 12 no. 3 (naik jadi prasyarat eksekusi) | [Fase 0 § 2.9](01-Fase0.md#29-database--docker-compose) (compose/deploy) | ⚠️ **Wajib** — pekerjaan infrastruktur dengan waktu tunggu sendiri | ⬜ Belum dieksekusi |
 | **REV-INF-02** | **HTTPS wajib untuk `API_BASE_URL` mobile** di semua environment non-dev; Android `usesCleartextTraffic=false` + `network_security_config.xml`; iOS ATS ketat tanpa `NSAllowsArbitraryLoads`; certificate pinning direkomendasikan dengan pin cadangan | Fase 7 § 2.2 (inline, baru terkonsolidasi di sini) | Konfigurasi build mobile | **Wajib** | ⬜ Belum dieksekusi |
-| **REV-INF-03** | **MinIO ditambahkan ke `docker-compose.yml`** + env `STORAGE_DRIVER=s3`, `STORAGE_S3_ENDPOINT/REGION/BUCKET_FACE/BUCKET_ATTENDANCE/ACCESS_KEY/SECRET_KEY/FORCE_PATH_STYLE/SSE`. Dua bucket terpisah karena masa retensinya berbeda | Fase 3 § 2.1 (D13) | [Fase 0 § 2.9](01-Fase0.md#29-database--docker-compose), `deploy/.env.example` | Wajib (bila D13 disetujui) | ⬜ Belum dieksekusi |
-| **REV-INF-04** | **`storage.Store.SignedURL()` tidak dipakai** di Fase 3/4/5/6 — konsekuensi D14 (foto dialirkan lewat API dengan cek permission per-request). Method tetap ada di interface untuk kemungkinan CDN di masa depan | Fase 3 § 2.2 (D14) | [Fase 0 § 2.6](01-Fase0.md#26-scaffolding-faceclock-api-go) interface `Store` | Catatan (bukan perubahan kode) | ⬜ Belum dieksekusi |
+| **REV-INF-03** | **MinIO ditambahkan ke `docker-compose.yml`** + env `STORAGE_DRIVER=s3`, `STORAGE_S3_ENDPOINT/REGION/BUCKET_FACE/BUCKET_ATTENDANCE/ACCESS_KEY/SECRET_KEY/FORCE_PATH_STYLE/SSE`. Dua bucket terpisah karena masa retensinya berbeda | Fase 3 § 2.1 (D13) | [Fase 0 § 2.9](01-Fase0.md#29-database--docker-compose), `deploy/.env.example` | Wajib (bila D13 disetujui) | ✅ Selesai dieksekusi (Fase 3, driver Local & S3 MinIO di internal/storage) |
+| **REV-INF-04** | **`storage.Store.SignedURL()` tidak dipakai** di Fase 3/4/5/6 — konsekuensi D14 (foto dialirkan lewat API dengan cek permission per-request). Method tetap ada di interface untuk kemungkinan CDN di masa depan | Fase 3 § 2.2 (D14) | [Fase 0 § 2.6](01-Fase0.md#26-scaffolding-faceclock-api-go) interface `Store` | Catatan (bukan perubahan kode) | ✅ Selesai dieksekusi (Fase 3, streaming biner terproteksi di #44) |
 | **REV-INF-05** | **Dependensi `faceclock-web` bertambah**: `react-hook-form`, `zod`, `leaflet` (D22), `msw` + `@playwright/test` (dev) | Fase 5 § 12 no. 5 | [Fase 0 § 2.7](01-Fase0.md#27-scaffolding-faceclock-web-react) | Tambahan | ⬜ Belum dieksekusi |
 | **REV-INF-06** | **Dependensi `faceclock-web` bertambah lagi**: `dompurify`, `ulid`; Playwright butuh flag kamera palsu di config | Fase 6 § 12 no. 6 | Fase 0 § 2.7 | Tambahan | ⬜ Belum dieksekusi |
 
@@ -582,16 +582,17 @@ yang HARUS sudah tercermin di kode sebelum fase itu dinyatakan selesai?*
 
 ### Fase 3 — Enrollment Wajah
 
-| Harus sudah ada | Kenapa di sini |
-|---|---|
-| **REV-DB-02** — `face_references.photo_key` (bukan `photo_url`) | Tabel dibuat di sini; bentuk master plan sudah diketahui salah |
-| **REV-CONV-03** — `face_references` tanpa `deleted_at` | idem |
-| **REV-ERR-01** — 12 kode error Fase 3 | idem |
-| **REV-PERM-01** — `face.reindex` + grant `super_admin` | idem |
-| **REV-SET-02** — 7 key `face.*` | idem |
-| **REV-MW-01** — implementasi `RequireConsent` | Slot dari Fase 0 diisi di sini |
-| **REV-INF-03** — driver S3/MinIO benar-benar dipakai | Foto referensi pertama disimpan di fase ini |
-| **REV-ERR-06** — `#38` memakai `FACE_SERVICE_NOT_CONFIGURED` (bukan `SERVICE_UNAVAILABLE`) | ⛔ **Kode ini "dimiliki" dan didefinisikan resmi di Fase 4 § 2.10, tapi dipakai lebih dulu di sini** (K-04). `internal/httpx/errors.go` harus sudah mendaftarkan kode ini saat Fase 3 dieksekusi — dependensi maju yang tidak biasa, dicatat eksplisit supaya tidak terlewat |
+| Harus sudah ada | Kenapa di sini | Status |
+|---|---|---|
+| **REV-DB-01** — `employees.attendance_mode` | Migration 000013 | ✅ Selesai dieksekusi |
+| **REV-DB-02** — `face_references.photo_key` (bukan `photo_url`) | Tabel dibuat di sini; bentuk master plan sudah diketahui salah | ✅ Selesai dieksekusi (migration 000014) |
+| **REV-CONV-03** — `face_references` tanpa `deleted_at` | idem | ✅ Selesai dieksekusi |
+| **REV-ERR-01** — 12 kode error Fase 3 | idem | ✅ Selesai dieksekusi |
+| **REV-PERM-01** — `face.reindex` + grant `super_admin` | idem | ✅ Selesai dieksekusi (migration 000017) |
+| **REV-SET-02** — 7 key `face.*` | idem | ✅ Selesai dieksekusi (migration 000017) |
+| **REV-MW-01** — implementasi `RequireConsent` | Slot dari Fase 0 diisi di sini | ✅ Selesai dieksekusi |
+| **REV-INF-03** — driver S3/MinIO benar-benar dipakai | Foto referensi pertama disimpan di fase ini | ✅ Selesai dieksekusi |
+| **REV-ERR-06** — `#38` memakai `FACE_SERVICE_NOT_CONFIGURED` (bukan `SERVICE_UNAVAILABLE`) | ⛔ **Kode ini "dimiliki" dan didefinisikan resmi di Fase 4 § 2.10, tapi dipakai lebih dulu di sini** (K-04). `internal/httpx/errors.go` harus sudah mendaftarkan kode ini saat Fase 3 dieksekusi — dependensi maju yang tidak biasa, dicatat eksplisit supaya tidak terlewat | ✅ Selesai dieksekusi |
 
 ### Fase 4 — Attendance Engine ⛔ fase dengan beban revisi terberat
 

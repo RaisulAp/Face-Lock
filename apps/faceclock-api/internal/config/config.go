@@ -26,6 +26,15 @@ type Config struct {
 	StorageLocalPath     string
 	StoragePublicBaseURL string
 
+	StorageS3Endpoint         string
+	StorageS3Region           string
+	StorageS3BucketFace       string
+	StorageS3BucketAttendance string
+	StorageS3AccessKey        string
+	StorageS3SecretKey        string
+	StorageS3ForcePathStyle   bool
+	StorageS3SSE              string
+
 	InferenceBaseURL string
 	InferenceToken   string
 	InferenceTimeout time.Duration
@@ -64,6 +73,15 @@ func Load() (*Config, error) {
 		StorageDriver:        getEnv("STORAGE_DRIVER", "local"),
 		StorageLocalPath:     getEnv("STORAGE_LOCAL_PATH", "/data/uploads"),
 		StoragePublicBaseURL: os.Getenv("STORAGE_PUBLIC_BASE_URL"),
+
+		StorageS3Endpoint:         os.Getenv("STORAGE_S3_ENDPOINT"),
+		StorageS3Region:           getEnv("STORAGE_S3_REGION", "us-east-1"),
+		StorageS3BucketFace:       getEnv("STORAGE_S3_BUCKET_FACE", "faceclock-face"),
+		StorageS3BucketAttendance: getEnv("STORAGE_S3_BUCKET_ATTENDANCE", "faceclock-attendance"),
+		StorageS3AccessKey:        os.Getenv("STORAGE_S3_ACCESS_KEY"),
+		StorageS3SecretKey:        os.Getenv("STORAGE_S3_SECRET_KEY"),
+		StorageS3ForcePathStyle:   getEnv("STORAGE_S3_FORCE_PATH_STYLE", "true") == "true",
+		StorageS3SSE:              os.Getenv("STORAGE_S3_SSE"),
 
 		InferenceBaseURL: os.Getenv("INFERENCE_BASE_URL"),
 		InferenceToken:   os.Getenv("INFERENCE_TOKEN"),
@@ -187,7 +205,20 @@ func Load() (*Config, error) {
 	}
 
 	switch cfg.StorageDriver {
-	case "local", "s3":
+	case "local":
+	case "s3":
+		if cfg.StorageS3Endpoint == "" {
+			missing = append(missing, "STORAGE_S3_ENDPOINT (required when STORAGE_DRIVER=s3)")
+		}
+		if cfg.StorageS3AccessKey == "" {
+			missing = append(missing, "STORAGE_S3_ACCESS_KEY (required when STORAGE_DRIVER=s3)")
+		}
+		if cfg.StorageS3SecretKey == "" {
+			missing = append(missing, "STORAGE_S3_SECRET_KEY (required when STORAGE_DRIVER=s3)")
+		}
+		if cfg.StorageS3BucketFace == "" {
+			missing = append(missing, "STORAGE_S3_BUCKET_FACE (required when STORAGE_DRIVER=s3)")
+		}
 	default:
 		missing = append(missing, fmt.Sprintf("STORAGE_DRIVER (got %q, must be local|s3)", cfg.StorageDriver))
 	}

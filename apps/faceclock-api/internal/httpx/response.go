@@ -63,6 +63,11 @@ func Created(w http.ResponseWriter, data any) {
 	writeJSON(w, http.StatusCreated, successEnvelope{Data: data})
 }
 
+// Accepted writes a 202 success envelope.
+func Accepted(w http.ResponseWriter, data any) {
+	writeJSON(w, http.StatusAccepted, successEnvelope{Data: data})
+}
+
 // NoContent writes a bare 204, per Fase 1's logout convention. No envelope
 // body is possible on 204 by definition.
 func NoContent(w http.ResponseWriter) {
@@ -72,6 +77,17 @@ func NoContent(w http.ResponseWriter) {
 // Paginated writes a 200 success envelope with a meta block.
 func Paginated(w http.ResponseWriter, data any, meta Meta) {
 	writeJSON(w, http.StatusOK, successEnvelope{Data: data, Meta: &meta})
+}
+
+// WithCustomMeta writes a 200 success envelope with an arbitrary meta block.
+func WithCustomMeta(w http.ResponseWriter, data any, meta any) {
+	writeJSON(w, http.StatusOK, struct {
+		Data any `json:"data"`
+		Meta any `json:"meta"`
+	}{
+		Data: data,
+		Meta: meta,
+	})
 }
 
 // Status writes a success envelope at a caller-chosen status — used by

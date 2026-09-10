@@ -17,6 +17,7 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	migratepgx "github.com/golang-migrate/migrate/v4/database/pgx/v5"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
 
@@ -24,8 +25,12 @@ import (
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/audit"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/auth"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/config"
+	"github.com/faceclock/faceclock/apps/faceclock-api/internal/consent"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/employee"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/face"
+	"github.com/faceclock/faceclock/apps/faceclock-api/internal/face/enrollment"
+	"github.com/faceclock/faceclock/apps/faceclock-api/internal/face/reference"
+	"github.com/faceclock/faceclock/apps/faceclock-api/internal/face/reindex"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/health"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/httpx"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/inference"
@@ -83,7 +88,20 @@ func main() {
 		}
 	}
 
-	store, err := storage.NewLocalStore(cfg.StorageLocalPath)
+	var store storage.Store
+	if cfg.StorageDriver == "s3" {
+		store, err = storage.NewS3Store(ctx, storage.S3Config{
+			Endpoint:             cfg.StorageS3Endpoint,
+			Region:               cfg.StorageS3Region,
+			Bucket:               cfg.StorageS3BucketFace,
+			AccessKey:            cfg.StorageS3AccessKey,
+			SecretKey:            cfg.StorageS3SecretKey,
+			ForcePathStyle:       cfg.StorageS3ForcePathStyle,
+			ServerSideEncryption: cfg.StorageS3SSE,
+		})
+	} else {
+		store, err = storage.NewLocalStore(cfg.StorageLocalPath)
+	}
 	if err != nil {
 		log.Error("could not initialize storage", slog.String("error", err.Error()))
 		os.Exit(1)
@@ -128,6 +146,29 @@ func main() {
 
 	auditHandler := audit.NewHandler(auditRecorder)
 
+	// Fase 3: Biometric Consent Subsystem (UU PDP No. 27/2022)
+	consentRepo := consent.NewRepository(pool)
+	consentCache := consent.NewCache(5 * time.Minute)
+	consentSvc := consent.NewService(consentRepo, consentCache, settingsSvc, auditRecorder)
+	consentHandler := consent.NewHandler(consentSvc)
+
+	// Fase 3: Multi-Photo Face Enrollment Sessions Subsystem
+	enrollRepo := enrollment.NewRepository(pool)
+	enrollSvc := enrollment.NewService(enrollRepo, store, inferenceClient, settingsSvc, consentSvc, auditRecorder, log)
+	enrollHandler := enrollment.NewHandler(enrollSvc)
+
+	// Fase 3: Face Reference Lifecycle Management Subsystem
+	refRepo := reference.NewPostgresRepository(pool)
+	refSvc := reference.NewService(refRepo, store, settingsSvc, consentSvc, auditRecorder, log)
+	refHandler := reference.NewHandler(refSvc)
+
+	// Fase 3: Face Reindex Jobs & Background Worker
+	reindexRepo := reindex.NewPostgresRepository(pool)
+	reindexSvc := reindex.NewService(reindexRepo, inferenceClient, settingsSvc, auditRecorder, log)
+	reindexHandler := reindex.NewHandler(reindexSvc)
+	reindexWorker := reindex.NewWorker(reindexRepo, store, inferenceClient, settingsSvc, auditRecorder, log, 10*time.Second)
+	reindexWorker.Start(ctx)
+
 	// Housekeeping job for expired refresh tokens (§ 3.7)
 	go func() {
 		ticker := time.NewTicker(24 * time.Hour)
@@ -157,6 +198,9 @@ func main() {
 		AuthMiddleware:    authMw,
 		RBACMiddleware:    rbac.RequirePermission,
 		RBACAnyMiddleware: rbac.RequireAnyPermission,
+		ConsentMiddleware: func(resolve func(*http.Request) (uuid.UUID, error)) func(http.Handler) http.Handler {
+			return consent.RequireConsent(consentSvc, resolve)
+		},
 
 		Handlers: httpx.Handlers{
 			AuthLogin:             authHandler.Login,
@@ -193,6 +237,35 @@ func main() {
 			EmployeeFaceEnroll:    empHandler.FaceEnroll,
 			AttendanceClockIn:     attendanceHandler.ClockIn,
 			AttendanceClockOut:    attendanceHandler.ClockOut,
+
+			// Fase 3: Biometric Consent (UU PDP No. 27/2022)
+			ConsentGetDocument: consentHandler.GetActiveDocument,
+			ConsentGetMe:       consentHandler.GetMyConsent,
+			ConsentGrant:       consentHandler.GrantConsent,
+			ConsentWithdraw:    consentHandler.WithdrawConsent,
+			ConsentGetEmployee: consentHandler.GetEmployeeConsent,
+			ConsentAdminRecord: consentHandler.AdminRecordConsent,
+
+			// Fase 3: Multi-Photo Face Enrollment
+			FaceEnrollmentCreate:      enrollHandler.CreateSession,
+			FaceEnrollmentGet:         enrollHandler.GetSession,
+			FaceEnrollmentUploadPhoto: enrollHandler.UploadPhoto,
+			FaceEnrollmentDeletePhoto: enrollHandler.DeletePhoto,
+			FaceEnrollmentCommit:      enrollHandler.CommitSession,
+			FaceEnrollmentCancel:      enrollHandler.CancelSession,
+
+			// Fase 3: Face References & Lifecycle
+			FaceReferenceListByEmployee: refHandler.ListReferences,
+			FaceReferenceGetPhoto:       refHandler.GetPhoto,
+			FaceReferenceDeactivate:     refHandler.DeactivateReference,
+			FaceReferenceDeleteAll:      refHandler.DeleteFaceData,
+			FaceEnrollmentStatusMe:      refHandler.GetEnrollmentStatusMe,
+
+			// Fase 3: Face Reindex Jobs
+			FaceReindexCreateJob: reindexHandler.CreateJob,
+			FaceReindexListJobs:  reindexHandler.ListJobs,
+			FaceReindexGetJob:    reindexHandler.GetJob,
+			FaceReindexCancelJob: reindexHandler.CancelJob,
 		},
 	})
 

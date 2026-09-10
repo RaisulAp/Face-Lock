@@ -18,10 +18,15 @@ import (
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/audit"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/auth"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/config"
+	"github.com/faceclock/faceclock/apps/faceclock-api/internal/consent"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/employee"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/face"
+	"github.com/faceclock/faceclock/apps/faceclock-api/internal/face/enrollment"
+	"github.com/faceclock/faceclock/apps/faceclock-api/internal/face/reference"
+	"github.com/faceclock/faceclock/apps/faceclock-api/internal/face/reindex"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/health"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/httpx"
+	"github.com/faceclock/faceclock/apps/faceclock-api/internal/inference"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/platform/logger"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/rbac"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/role"
@@ -30,8 +35,13 @@ import (
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/storage"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/user"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/version"
+	"github.com/golang-migrate/migrate/v4"
+	migratepgx "github.com/golang-migrate/migrate/v4/database/pgx/v5"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
 )
 
 type TestApp struct {
@@ -49,6 +59,12 @@ type TestApp struct {
 	RoleSvc       *role.Service
 	SettingsSvc   *settings.Service
 	AuditRec      *audit.Recorder
+	ConsentSvc    *consent.Service
+	EnrollmentSvc *enrollment.Service
+	FaceRefSvc    *reference.Service
+	ReindexSvc    *reindex.Service
+	ReindexRepo   reindex.Repository
+	MockInfEngine *inference.MockFaceEngine
 }
 
 func SetupTestApp(t *testing.T) *TestApp {
@@ -68,6 +84,21 @@ func SetupTestApp(t *testing.T) *TestApp {
 	}
 	if err := pool.Ping(ctx); err != nil {
 		t.Skipf("skipping integration tests: ping failed: %v", err)
+	}
+
+	// Auto-run migrations for test database
+	migPath := "file://../../migrations"
+	if _, err := os.Stat("../../migrations"); os.IsNotExist(err) {
+		migPath = "file://migrations"
+	}
+	if connConfig, err := pgx.ParseConfig(connStr); err == nil {
+		sqlDB := stdlib.OpenDB(*connConfig)
+		if driver, err := migratepgx.WithInstance(sqlDB, &migratepgx.Config{}); err == nil {
+			if m, err := migrate.NewWithDatabaseInstance(migPath, "pgx", driver); err == nil {
+				_ = m.Up()
+			}
+		}
+		_ = sqlDB.Close()
 	}
 
 	log := logger.New("error", io.Discard)
@@ -96,6 +127,17 @@ func SetupTestApp(t *testing.T) *TestApp {
 		SeedAdminPassword: "SeedAdminPassword123!",
 		Logger:            log,
 	})
+
+	// Ensure app_settings has calibrated face.model_version for testing
+	_, _ = pool.Exec(context.Background(), `UPDATE app_settings SET value = '"buffalo_l@v1"' WHERE key = 'face.model_version'`)
+	_, _ = pool.Exec(context.Background(), `
+		DELETE FROM face_reindex_items;
+		DELETE FROM face_reindex_jobs;
+		DELETE FROM face_references;
+		DELETE FROM face_enrollment_photos;
+		DELETE FROM face_enrollment_sessions;
+		DELETE FROM biometric_consents;
+	`)
 
 	tokenMgr, err := auth.NewTokenManager(cfg.JWTSecret, cfg.JWTAccessTTL)
 	if err != nil {
@@ -132,6 +174,25 @@ func SetupTestApp(t *testing.T) *TestApp {
 	auditHandler := audit.NewHandler(auditRec)
 	healthHandler := &health.Handler{DB: pool}
 
+	mockInfEngine := inference.NewMockFaceEngine()
+
+	consentRepo := consent.NewRepository(pool)
+	consentCache := consent.NewCache(5 * time.Minute)
+	consentSvc := consent.NewService(consentRepo, consentCache, settingsSvc, auditRec)
+	consentHandler := consent.NewHandler(consentSvc)
+
+	enrollRepo := enrollment.NewRepository(pool)
+	enrollSvc := enrollment.NewService(enrollRepo, store, mockInfEngine, settingsSvc, consentSvc, auditRec, log)
+	enrollHandler := enrollment.NewHandler(enrollSvc)
+
+	refRepo := reference.NewPostgresRepository(pool)
+	refSvc := reference.NewService(refRepo, store, settingsSvc, consentSvc, auditRec, log)
+	refHandler := reference.NewHandler(refSvc)
+
+	reindexRepo := reindex.NewPostgresRepository(pool)
+	reindexSvc := reindex.NewService(reindexRepo, mockInfEngine, settingsSvc, auditRec, log)
+	reindexHandler := reindex.NewHandler(reindexSvc)
+
 	router := httpx.NewRouter(httpx.RouterDeps{
 		Logger:             log,
 		CORSAllowedOrigins: cfg.CORSAllowedOrigins,
@@ -144,6 +205,9 @@ func SetupTestApp(t *testing.T) *TestApp {
 		AuthMiddleware:    authMw,
 		RBACMiddleware:    rbac.RequirePermission,
 		RBACAnyMiddleware: rbac.RequireAnyPermission,
+		ConsentMiddleware: func(resolve func(*http.Request) (uuid.UUID, error)) func(http.Handler) http.Handler {
+			return consent.RequireConsent(consentSvc, resolve)
+		},
 
 		Handlers: httpx.Handlers{
 			AuthLogin:             authHandler.Login,
@@ -180,6 +244,35 @@ func SetupTestApp(t *testing.T) *TestApp {
 			EmployeeFaceEnroll:    empHandler.FaceEnroll,
 			AttendanceClockIn:     attendanceHandler.ClockIn,
 			AttendanceClockOut:    attendanceHandler.ClockOut,
+
+			// Fase 3: Biometric Consent (UU PDP No. 27/2022)
+			ConsentGetDocument: consentHandler.GetActiveDocument,
+			ConsentGetMe:       consentHandler.GetMyConsent,
+			ConsentGrant:       consentHandler.GrantConsent,
+			ConsentWithdraw:    consentHandler.WithdrawConsent,
+			ConsentGetEmployee: consentHandler.GetEmployeeConsent,
+			ConsentAdminRecord: consentHandler.AdminRecordConsent,
+
+			// Fase 3: Multi-Photo Face Enrollment
+			FaceEnrollmentCreate:      enrollHandler.CreateSession,
+			FaceEnrollmentGet:         enrollHandler.GetSession,
+			FaceEnrollmentUploadPhoto: enrollHandler.UploadPhoto,
+			FaceEnrollmentDeletePhoto: enrollHandler.DeletePhoto,
+			FaceEnrollmentCommit:      enrollHandler.CommitSession,
+			FaceEnrollmentCancel:      enrollHandler.CancelSession,
+
+			// Fase 3: Face References & Lifecycle
+			FaceReferenceListByEmployee: refHandler.ListReferences,
+			FaceReferenceGetPhoto:       refHandler.GetPhoto,
+			FaceReferenceDeactivate:     refHandler.DeactivateReference,
+			FaceReferenceDeleteAll:      refHandler.DeleteFaceData,
+			FaceEnrollmentStatusMe:      refHandler.GetEnrollmentStatusMe,
+
+			// Fase 3: Face Reindex Jobs
+			FaceReindexCreateJob: reindexHandler.CreateJob,
+			FaceReindexListJobs:  reindexHandler.ListJobs,
+			FaceReindexGetJob:    reindexHandler.GetJob,
+			FaceReindexCancelJob: reindexHandler.CancelJob,
 		},
 	})
 
@@ -198,6 +291,12 @@ func SetupTestApp(t *testing.T) *TestApp {
 		RoleSvc:       roleSvc,
 		SettingsSvc:   settingsSvc,
 		AuditRec:      auditRec,
+		ConsentSvc:    consentSvc,
+		EnrollmentSvc: enrollSvc,
+		FaceRefSvc:    refSvc,
+		ReindexSvc:    reindexSvc,
+		ReindexRepo:   reindexRepo,
+		MockInfEngine: mockInfEngine,
 	}
 }
 

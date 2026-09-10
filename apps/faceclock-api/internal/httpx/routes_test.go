@@ -78,6 +78,29 @@ func TestAllRoutesHaveGuards(t *testing.T) {
 			EmployeeFaceEnroll:    dummyHandler,
 			AttendanceClockIn:     dummyHandler,
 			AttendanceClockOut:    dummyHandler,
+
+			// Fase 3
+			ConsentGetDocument:          dummyHandler,
+			ConsentGetMe:                dummyHandler,
+			ConsentGrant:                dummyHandler,
+			ConsentWithdraw:             dummyHandler,
+			ConsentGetEmployee:          dummyHandler,
+			ConsentAdminRecord:          dummyHandler,
+			FaceEnrollmentCreate:        dummyHandler,
+			FaceEnrollmentGet:           dummyHandler,
+			FaceEnrollmentUploadPhoto:   dummyHandler,
+			FaceEnrollmentDeletePhoto:   dummyHandler,
+			FaceEnrollmentCommit:        dummyHandler,
+			FaceEnrollmentCancel:        dummyHandler,
+			FaceReferenceListByEmployee: dummyHandler,
+			FaceReferenceGetPhoto:       dummyHandler,
+			FaceReferenceDeactivate:     dummyHandler,
+			FaceReferenceDeleteAll:      dummyHandler,
+			FaceEnrollmentStatusMe:      dummyHandler,
+			FaceReindexCreateJob:        dummyHandler,
+			FaceReindexListJobs:         dummyHandler,
+			FaceReindexGetJob:           dummyHandler,
+			FaceReindexCancelJob:        dummyHandler,
 		},
 	}
 
@@ -134,9 +157,9 @@ func TestAllRoutesHaveGuards(t *testing.T) {
 		}
 	}
 
-	// 4. Validate exact count of Fase 0 + Fase 1 + Fase 2 routes.
-	// Total expected: 3 (base) + 31 (Fase 1 API v1) + 3 (Fase 2 API v1) = 37 routes in registry
-	expectedCount := 37
+	// 4. Validate exact count of Fase 0 + Fase 1 + Fase 2 + Fase 3 routes.
+	// Total expected: 3 (base) + 31 (Fase 1 API v1) + 3 (Fase 2 API v1) + 21 (Fase 3 API v1) = 58 routes in registry
+	expectedCount := 58
 	if len(httpx.RouteRegistry) != expectedCount {
 		t.Errorf("expected %d routes in registry, got %d", expectedCount, len(httpx.RouteRegistry))
 	}

@@ -26,6 +26,12 @@ type Store interface {
 	// idempotently.
 	Delete(ctx context.Context, key string) error
 
+	// Copy duplicates an object from srcKey to dstKey within the store.
+	Copy(ctx context.Context, srcKey, dstKey string) error
+
+	// List returns all keys matching the given prefix.
+	List(ctx context.Context, prefix string) ([]string, error)
+
 	// SignedURL returns a time-limited URL for key.
 	//
 	// Reserved for a future CDN-backed deployment — [REV-INF-04] (Fase 3 §

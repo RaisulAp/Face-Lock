@@ -7,11 +7,12 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
+	"github.com/google/uuid"
 
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/httpx/middleware"
 )
 
-// Handlers contains all the HTTP handler functions for Fase 1.
+// Handlers contains all the HTTP handler functions for Fase 1, 2, and 3.
 type Handlers struct {
 	// Auth
 	AuthLogin          http.HandlerFunc
@@ -56,10 +57,39 @@ type Handlers struct {
 	// Audit Logs
 	AuditQuery http.HandlerFunc
 
-	// Fase 2: Biometrics & Attendance
+	// Fase 2: Biometrics & Attendance (Legacy Stubs)
 	EmployeeFaceEnroll http.HandlerFunc
 	AttendanceClockIn  http.HandlerFunc
 	AttendanceClockOut http.HandlerFunc
+
+	// Fase 3: Biometric Consent (UU PDP No. 27/2022)
+	ConsentGetDocument http.HandlerFunc
+	ConsentGetMe       http.HandlerFunc
+	ConsentGrant       http.HandlerFunc
+	ConsentWithdraw    http.HandlerFunc
+	ConsentGetEmployee http.HandlerFunc
+	ConsentAdminRecord http.HandlerFunc
+
+	// Fase 3: Multi-Photo Face Enrollment Sessions
+	FaceEnrollmentCreate      http.HandlerFunc
+	FaceEnrollmentGet         http.HandlerFunc
+	FaceEnrollmentUploadPhoto http.HandlerFunc
+	FaceEnrollmentDeletePhoto http.HandlerFunc
+	FaceEnrollmentCommit      http.HandlerFunc
+	FaceEnrollmentCancel      http.HandlerFunc
+
+	// Fase 3: Face References & Lifecycle Management
+	FaceReferenceListByEmployee http.HandlerFunc
+	FaceReferenceGetPhoto       http.HandlerFunc
+	FaceReferenceDeactivate     http.HandlerFunc
+	FaceReferenceDeleteAll      http.HandlerFunc
+	FaceEnrollmentStatusMe      http.HandlerFunc
+
+	// Fase 3: Face Reindex Jobs
+	FaceReindexCreateJob http.HandlerFunc
+	FaceReindexListJobs  http.HandlerFunc
+	FaceReindexGetJob    http.HandlerFunc
+	FaceReindexCancelJob http.HandlerFunc
 }
 
 // RouterDeps is every dependency the router needs to wire the middleware
@@ -77,6 +107,7 @@ type RouterDeps struct {
 	AuthMiddleware    func(http.Handler) http.Handler
 	RBACMiddleware    func(permission string) func(http.Handler) http.Handler
 	RBACAnyMiddleware func(permissions ...string) func(http.Handler) http.Handler
+	ConsentMiddleware func(resolve func(*http.Request) (uuid.UUID, error)) func(http.Handler) http.Handler
 
 	Handlers Handlers
 }
@@ -256,8 +287,86 @@ func mountAPIv1(r chi.Router, deps RouterDeps) {
 			if deps.Handlers.AttendanceClockOut != nil {
 				r.With(rbacGuard(deps, "attendance.checkin")).Post("/attendance/clock-out", deps.Handlers.AttendanceClockOut)
 			}
+
+			// Fase 3: Biometric Consent (UU PDP No. 27/2022)
+			if deps.Handlers.ConsentGetDocument != nil {
+				r.Get("/consents/document", deps.Handlers.ConsentGetDocument)
+			}
+			if deps.Handlers.ConsentGetMe != nil {
+				r.Get("/consents/me", deps.Handlers.ConsentGetMe)
+			}
+			if deps.Handlers.ConsentGrant != nil {
+				r.With(rbacGuard(deps, "face.enroll_self")).Post("/consents", deps.Handlers.ConsentGrant)
+			}
+			if deps.Handlers.ConsentWithdraw != nil {
+				r.Post("/consents/withdraw", deps.Handlers.ConsentWithdraw)
+			}
+			if deps.Handlers.ConsentGetEmployee != nil {
+				r.With(rbacAnyGuard(deps, "face.read_any", "face.read_self")).Get("/employees/{id}/consent", deps.Handlers.ConsentGetEmployee)
+			}
+			if deps.Handlers.ConsentAdminRecord != nil {
+				r.With(rbacGuard(deps, "face.enroll_any")).Post("/employees/{id}/consent", deps.Handlers.ConsentAdminRecord)
+			}
+
+			// Fase 3: Multi-Photo Face Enrollment Sessions
+			if deps.Handlers.FaceEnrollmentCreate != nil {
+				r.With(rbacAnyGuard(deps, "face.enroll_self", "face.enroll_any")).Post("/face/enrollments", deps.Handlers.FaceEnrollmentCreate)
+			}
+			if deps.Handlers.FaceEnrollmentGet != nil {
+				r.With(rbacAnyGuard(deps, "face.enroll_self", "face.enroll_any")).Get("/face/enrollments/{id}", deps.Handlers.FaceEnrollmentGet)
+			}
+			if deps.Handlers.FaceEnrollmentUploadPhoto != nil {
+				r.With(rbacAnyGuard(deps, "face.enroll_self", "face.enroll_any")).Post("/face/enrollments/{id}/photos", deps.Handlers.FaceEnrollmentUploadPhoto)
+			}
+			if deps.Handlers.FaceEnrollmentDeletePhoto != nil {
+				r.With(rbacAnyGuard(deps, "face.enroll_self", "face.enroll_any")).Delete("/face/enrollments/{id}/photos/{pid}", deps.Handlers.FaceEnrollmentDeletePhoto)
+			}
+			if deps.Handlers.FaceEnrollmentCommit != nil {
+				r.With(rbacAnyGuard(deps, "face.enroll_self", "face.enroll_any")).Post("/face/enrollments/{id}/commit", deps.Handlers.FaceEnrollmentCommit)
+			}
+			if deps.Handlers.FaceEnrollmentCancel != nil {
+				r.With(rbacAnyGuard(deps, "face.enroll_self", "face.enroll_any")).Delete("/face/enrollments/{id}", deps.Handlers.FaceEnrollmentCancel)
+			}
+
+			// Fase 3: Face References & Lifecycle Management
+			if deps.Handlers.FaceReferenceListByEmployee != nil {
+				r.With(rbacAnyGuard(deps, "face.read_any", "face.read_self")).Get("/employees/{id}/face-references", deps.Handlers.FaceReferenceListByEmployee)
+			}
+			if deps.Handlers.FaceReferenceGetPhoto != nil {
+				r.With(rbacAnyGuard(deps, "face.read_any", "face.read_self")).Get("/face/references/{id}/photo", deps.Handlers.FaceReferenceGetPhoto)
+			}
+			if deps.Handlers.FaceReferenceDeactivate != nil {
+				r.With(rbacGuard(deps, "face.delete_any")).Patch("/face/references/{id}", deps.Handlers.FaceReferenceDeactivate)
+			}
+			if deps.Handlers.FaceReferenceDeleteAll != nil {
+				r.With(rbacGuard(deps, "face.delete_any")).Delete("/employees/{id}/face-data", deps.Handlers.FaceReferenceDeleteAll)
+			}
+			if deps.Handlers.FaceEnrollmentStatusMe != nil {
+				r.With(rbacGuard(deps, "face.read_self")).Get("/face/enrollment-status/me", deps.Handlers.FaceEnrollmentStatusMe)
+			}
+
+			// Fase 3: Face Reindex Jobs
+			if deps.Handlers.FaceReindexCreateJob != nil {
+				r.With(rbacGuard(deps, "face.reindex")).Post("/face/reindex-jobs", deps.Handlers.FaceReindexCreateJob)
+			}
+			if deps.Handlers.FaceReindexListJobs != nil {
+				r.With(rbacGuard(deps, "face.reindex")).Get("/face/reindex-jobs", deps.Handlers.FaceReindexListJobs)
+			}
+			if deps.Handlers.FaceReindexGetJob != nil {
+				r.With(rbacGuard(deps, "face.reindex")).Get("/face/reindex-jobs/{id}", deps.Handlers.FaceReindexGetJob)
+			}
+			if deps.Handlers.FaceReindexCancelJob != nil {
+				r.With(rbacGuard(deps, "face.reindex")).Post("/face/reindex-jobs/{id}/cancel", deps.Handlers.FaceReindexCancelJob)
+			}
 		})
 	})
+}
+
+func consentGuard(deps RouterDeps, resolve func(*http.Request) (uuid.UUID, error)) func(http.Handler) http.Handler {
+	if deps.ConsentMiddleware != nil {
+		return deps.ConsentMiddleware(resolve)
+	}
+	return func(next http.Handler) http.Handler { return next }
 }
 
 func rbacGuard(deps RouterDeps, perm string) func(http.Handler) http.Handler {

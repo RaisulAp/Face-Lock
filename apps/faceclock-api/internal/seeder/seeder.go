@@ -109,6 +109,62 @@ var initialAppSettings = []appSettingSeed{
 		Description: "Durasi penguncian akun setelah gagal login (menit)",
 		IsPublic:    false,
 	},
+	{
+		Key:         "face.min_reference_photos",
+		Value:       3,
+		ValueType:   "number",
+		Description: "Jumlah minimum foto referensi aktif per karyawan",
+		IsPublic:    true,
+	},
+	{
+		Key:         "face.max_reference_photos",
+		Value:       5,
+		ValueType:   "number",
+		Description: "Jumlah maksimum foto referensi aktif per karyawan",
+		IsPublic:    true,
+	},
+	{
+		Key:         "face.enrollment_session_ttl_minutes",
+		Value:       30,
+		ValueType:   "number",
+		Description: "Masa berlaku sesi enrollment (menit)",
+		IsPublic:    true,
+	},
+	{
+		Key:         "face.min_quality_score",
+		Value:       0.35,
+		ValueType:   "number",
+		Description: "Skor kualitas minimum agar foto diterima sebagai referensi",
+		IsPublic:    false,
+	},
+	{
+		Key:         "face.duplicate_check_enabled",
+		Value:       true,
+		ValueType:   "boolean",
+		Description: "Periksa apakah wajah sudah terdaftar di karyawan lain",
+		IsPublic:    false,
+	},
+	{
+		Key:         "face.duplicate_threshold",
+		Value:       0.50,
+		ValueType:   "number",
+		Description: "Ambang similarity untuk deteksi wajah duplikat",
+		IsPublic:    false,
+	},
+	{
+		Key:         "face.retention_days_after_resign",
+		Value:       365,
+		ValueType:   "number",
+		Description: "Hari sebelum data wajah karyawan resign dihapus",
+		IsPublic:    false,
+	},
+	{
+		Key:         "face.consent_required",
+		Value:       true,
+		ValueType:   "boolean",
+		Description: "Wajibkan consent biometrik sebelum enrollment",
+		IsPublic:    true,
+	},
 }
 
 // Run executes the idempotent seeder (§ 5.6).

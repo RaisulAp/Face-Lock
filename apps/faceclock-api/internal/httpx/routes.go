@@ -66,8 +66,37 @@ var RouteRegistry = map[string]RouteGuard{
 	// #31: Audit Logs Endpoint
 	"GET /api/v1/audit-logs": "audit.read",
 
-	// #32 - #34: Fase 2 Biometrics & Attendance Endpoints
+	// Fase 2: Biometrics & Attendance Endpoints (Legacy / Phase 2 Stubs)
 	"POST /api/v1/employees/{id}/face-enroll": "face.enroll_any|face.enroll_self",
 	"POST /api/v1/attendance/clock-in":        "attendance.checkin",
 	"POST /api/v1/attendance/clock-out":       "attendance.checkin",
+
+	// #32 - #37: Biometric Consent Endpoints (Fase 3 - UU PDP No. 27/2022)
+	"GET /api/v1/consents/document":       GuardAuth,
+	"GET /api/v1/consents/me":             GuardAuth,
+	"POST /api/v1/consents":               "face.enroll_self",
+	"POST /api/v1/consents/withdraw":      GuardAuth,
+	"GET /api/v1/employees/{id}/consent":  "face.read_any|face.read_self",
+	"POST /api/v1/employees/{id}/consent": "face.enroll_any",
+
+	// #38 - #43: Multi-Photo Face Enrollment Sessions (Fase 3)
+	"POST /api/v1/face/enrollments":                     "face.enroll_self|face.enroll_any",
+	"GET /api/v1/face/enrollments/{id}":                 "face.enroll_self|face.enroll_any",
+	"POST /api/v1/face/enrollments/{id}/photos":         "face.enroll_self|face.enroll_any",
+	"DELETE /api/v1/face/enrollments/{id}/photos/{pid}": "face.enroll_self|face.enroll_any",
+	"POST /api/v1/face/enrollments/{id}/commit":         "face.enroll_self|face.enroll_any",
+	"DELETE /api/v1/face/enrollments/{id}":              "face.enroll_self|face.enroll_any",
+
+	// #44 - #48: Face References & Lifecycle Management (Fase 3)
+	"GET /api/v1/employees/{id}/face-references": "face.read_any|face.read_self",
+	"GET /api/v1/face/references/{id}/photo":     "face.read_any|face.read_self",
+	"PATCH /api/v1/face/references/{id}":         "face.delete_any",
+	"DELETE /api/v1/employees/{id}/face-data":    "face.delete_any",
+	"GET /api/v1/face/enrollment-status/me":      "face.read_self",
+
+	// #49 - #52: Face Reindex Jobs (Fase 3)
+	"POST /api/v1/face/reindex-jobs":             "face.reindex",
+	"GET /api/v1/face/reindex-jobs":              "face.reindex",
+	"GET /api/v1/face/reindex-jobs/{id}":         "face.reindex",
+	"POST /api/v1/face/reindex-jobs/{id}/cancel": "face.reindex",
 }

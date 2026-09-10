@@ -81,3 +81,42 @@ func TestLocalStore_SignedURLIsUnimplemented(t *testing.T) {
 		t.Fatal("expected SignedURL to return an error, got nil")
 	}
 }
+
+func TestLocalStore_CopyAndList(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewLocalStore(dir)
+	if err != nil {
+		t.Fatalf("NewLocalStore: %v", err)
+	}
+	ctx := context.Background()
+
+	srcKey := "staging/sess1/photo1.jpg"
+	dstKey := "face/emp1/ref1.jpg"
+
+	_, err = store.Put(ctx, srcKey, strings.NewReader("hello-world-photo"), "image/jpeg")
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	if err := store.Copy(ctx, srcKey, dstKey); err != nil {
+		t.Fatalf("Copy: %v", err)
+	}
+
+	rc, err := store.Get(ctx, dstKey)
+	if err != nil {
+		t.Fatalf("Get dstKey: %v", err)
+	}
+	content, _ := io.ReadAll(rc)
+	rc.Close()
+	if string(content) != "hello-world-photo" {
+		t.Errorf("copied content mismatch: %q", string(content))
+	}
+
+	keys, err := store.List(ctx, "face/")
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(keys) != 1 || keys[0] != dstKey {
+		t.Errorf("List got %v, want [%s]", keys, dstKey)
+	}
+}

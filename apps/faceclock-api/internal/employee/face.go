@@ -3,6 +3,7 @@ package employee
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -127,14 +128,24 @@ func (s *Service) EnrollFace(ctx context.Context, empID uuid.UUID, photoBytes []
 		return nil, fmt.Errorf("updating employee face record: %w", err)
 	}
 
+	photoSHA256 := fmt.Sprintf("%x", sha256.Sum256(photoBytes))
+	validMIMEs := map[string]bool{
+		"image/jpeg": true,
+		"image/png":  true,
+		"image/webp": true,
+	}
+	if !validMIMEs[contentType] {
+		contentType = "image/jpeg"
+	}
+
 	const insertRefQ = `
 		INSERT INTO face_references (
-			employee_id, photo_key, embedding, model_version, is_active, created_at
+			employee_id, photo_key, photo_sha256, photo_bytes, photo_mime, capture_source, embedding, model_version, is_active, created_at
 		) VALUES (
-			$1, $2, $3::vector, $4, true, NOW()
+			$1, $2, $3, $4, $5, $6, $7::vector, $8, true, NOW()
 		)
 	`
-	if _, err := tx.Exec(ctx, insertRefQ, empID, photoKey, pgVector, modVer); err != nil {
+	if _, err := tx.Exec(ctx, insertRefQ, empID, photoKey, photoSHA256, len(photoBytes), contentType, "admin_upload", pgVector, modVer); err != nil {
 		return nil, fmt.Errorf("inserting face reference: %w", err)
 	}
 
@@ -222,7 +233,10 @@ func extractPhotoBytes(r *http.Request) ([]byte, string, error) {
 					return nil, "", httpx.NewAppError(httpx.CodeBadRequest, "failed to read uploaded file")
 				}
 				cType := header.Header.Get("Content-Type")
-				if cType == "" {
+				if cType == "" || cType == "application/octet-stream" {
+					cType = http.DetectContentType(data)
+				}
+				if cType == "application/octet-stream" {
 					cType = "image/jpeg"
 				}
 				return data, cType, nil
