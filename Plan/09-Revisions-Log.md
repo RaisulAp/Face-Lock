@@ -151,11 +151,11 @@ Kolom, tabel, dan CHECK yang **tidak ada** di draft awal
 |---|---|---|---|---|---|
 | **REV-DB-01** | Kolom baru `employees.attendance_mode text NOT NULL DEFAULT 'face' CHECK (IN ('face','manual'))` — jalur sah bagi karyawan yang menolak consent | Fase 3 § 2.4d, § 3.3 | Tabel `employees` milik Fase 1 (migration 000002); ditambahkan lewat migration 000013 | Wajib | ✅ Selesai dieksekusi (Fase 3, migration 000013) |
 | **REV-DB-02** | `face_references.photo_url` → **`photo_key`** (key object storage) + `photo_sha256`, `photo_bytes`, `photo_mime`, `photo_purged_at`. Tidak ada URL publik | Fase 3 § 2.2 (D14), § 3.4 | **Master Plan § 5** (draft model data), migration 000014 | Wajib | ✅ Selesai dieksekusi (Fase 3, migration 000014) |
-| **REV-DB-03** | `attendances.photo_url` → **`photo_key`** + `photo_sha256`, `photo_bytes`, `photo_mime`, `photo_purged_at` | Fase 4 § 3.2 (turunan D14) | **Master Plan § 5**, migration 000019 | Wajib | ⬜ Belum dieksekusi |
-| **REV-DB-04** | Kolom liveness pada `attendances`: `liveness_passed boolean NULL`, `liveness_supported boolean NULL`, `liveness_method text NULL`, `liveness_challenges jsonb NOT NULL DEFAULT '[]'` | Fase 7 § 14 R4a | Migration 000019 (Fase 4) | **Wajib** | ⬜ Belum dieksekusi |
-| **REV-DB-05** | Kolom `attendances.location_is_mocked boolean NULL` (dari `Position.isMocked`, Android) | Fase 7 § 14 R5a | Migration 000019 (Fase 4); mengoreksi [Fase 4 E21](05-Fase4.md#63-lokasi) yang menyatakan mock location "tidak terdeteksi" | Direkomendasikan | ⬜ Belum dieksekusi |
-| **REV-DB-06** | `attendances.fallback_reason` CHECK bertambah 2 nilai: `'liveness_failed'`, `'location_mocked'` | Fase 7 § 14 R4b, R5b | Migration 000019 (Fase 4) | R4b **Wajib**, R5b Direkomendasikan | ⬜ Belum dieksekusi |
-| **REV-DB-07** | `attendance_attempts.outcome` CHECK bertambah 2 nilai: `'liveness_failed'`, `'location_mocked'` | Fase 7 § 14 R4c, R5c | Migration 000020 (Fase 4) | R4c **Wajib**, R5c Direkomendasikan | ⬜ Belum dieksekusi |
+| **REV-DB-03** | `attendances.photo_url` → **`photo_key`** + `photo_sha256`, `photo_bytes`, `photo_mime`, `photo_purged_at` | Fase 4 § 3.2 (turunan D14) | **Master Plan § 5**, migration 000019 | Wajib | ✅ Selesai dieksekusi (Fase 4, migration 000019) |
+| **REV-DB-04** | Kolom liveness pada `attendances`: `liveness_passed boolean NULL`, `liveness_supported boolean NULL`, `liveness_method text NULL`, `liveness_challenges jsonb NOT NULL DEFAULT '[]'` | Fase 7 § 14 R4a | Migration 000019 (Fase 4) | **Wajib** | ✅ Selesai dieksekusi (Fase 4, migration 000019) |
+| **REV-DB-05** | Kolom `attendances.location_is_mocked boolean NULL` (dari `Position.isMocked`, Android) | Fase 7 § 14 R5a | Migration 000019 (Fase 4); mengoreksi [Fase 4 E21](05-Fase4.md#63-lokasi) yang menyatakan mock location "tidak terdeteksi" | Direkomendasikan | ✅ Selesai dieksekusi (Fase 4, migration 000019) |
+| **REV-DB-06** | `attendances.fallback_reason` CHECK bertambah 2 nilai: `'liveness_failed'`, `'location_mocked'` | Fase 7 § 14 R4b, R5b | Migration 000019 (Fase 4) | R4b **Wajib**, R5b Direkomendasikan | ✅ Selesai dieksekusi (Fase 4, migration 000019) |
+| **REV-DB-07** | `attendance_attempts.outcome` CHECK bertambah 2 nilai: `'liveness_failed'`, `'location_mocked'` | Fase 7 § 14 R4c, R5c | Migration 000020 (Fase 4) | R4c **Wajib**, R5c Direkomendasikan | ✅ Selesai dieksekusi (Fase 4, migration 000020) |
 
 > ⚠️ **REV-DB-04 sampai REV-DB-07 mengubah tabel yang dibuat Fase 4.** Karena Fase 4
 > belum dieksekusi, kolom dan CHECK ini **harus masuk ke migration 000019/000020 sejak
@@ -170,12 +170,12 @@ Katalog awal: **#1–#70** (Fase 1: #1–#31, Fase 3: #32–#52, Fase 4: #53–#
 | **REV-EP-01** | **Endpoint baru #71** `GET /api/v1/attendances/summary` — rekap per karyawan. Guard `attendance.read_all` | Fase 5 § 2.1, § 12 no. 1 | Katalog endpoint; `routes.go`; `rbac_matrix_test.go` | Wajib (deliverable Fase 5) | ⬜ Belum dieksekusi |
 | **REV-EP-02** | **Endpoint baru #72** `GET /api/v1/attendances/export` — CSV streaming + BOM. Guard `attendance.export` (permission sudah di-seed Fase 1, **tidak ada permission baru**) | Fase 5 § 2.1, § 12 no. 1 | Katalog endpoint; `routes.go`; `rbac_matrix_test.go` | Wajib (deliverable Fase 5) | ⬜ Belum dieksekusi |
 | **REV-EP-03** | **#7 `GET /employees`** — tambah filter & field response `attendance_mode`, `consent_status`, `enrollment_status` | Fase 5 § 2.1, § 12 no. 2 | [Fase 1 § 4.2](02-Fase1.md#42-employees); bergantung pada tabel Fase 3 (`biometric_consents`, `face_references`) | Tambahan, kompatibel mundur | ⬜ Belum dieksekusi |
-| **REV-EP-04** | **#55 `GET /attendances/context`** — tambah `require_face_for_checkout`, `checkout_without_face_status`, `max_note_length` | Fase 6 § 12 no. 1 → **diulang** Fase 7 § 14 R1 | [Fase 4 § 4.4](05-Fase4.md#44-get-attendancescontext) | Direkomendasikan → naik jadi **Wajib** karena kontradiksi K-01 (§ 4) | ⬜ Belum dieksekusi — ✅ **kontrak final** ([K-01 resolved](#k-01--checkout_without_face_status-tidak-dapat-dibaca-karyawan--kontradiksi--resolved)) |
-| **REV-EP-05** | **#55** — tambah `photo.recommended_dimension_px` (1280) dan `photo.max_dimension_px` (1920). Web mengasumsikan 1280×720 tetap; kamera ponsel 5–108 MP butuh target dari server | Fase 7 § 14 R2 | [Fase 4 § 4.4](05-Fase4.md#44-get-attendancescontext); [Fase 6 D24](07-Fase6.md#d24--parameter-capture--butuh-konfirmasi) | **Wajib** | ⬜ Belum dieksekusi |
-| **REV-EP-06** | **#55** — tambah objek `liveness`: `policy`, `max_attempts`, `challenge_count`, `timeout_seconds` | Fase 7 § 14 R4e | Fase 4 § 4.4 | **Wajib** | ⬜ Belum dieksekusi |
-| **REV-EP-07** | **#55** — tambah `geofence.mocked_location_policy` | Fase 7 § 14 R5e | Fase 4 § 4.4 | Direkomendasikan | ⬜ Belum dieksekusi |
-| **REV-EP-08** | **#53 / #54 `check-in` / `check-out`** — terima field request baru: `liveness_passed`, `liveness_supported`, `liveness_method`, `liveness_challenges`, `location_is_mocked` | Fase 7 § 14 R4d, R5d | [Fase 4 § 4.2](05-Fase4.md#42-post-attendancescheck-in) | R4d **Wajib**, R5d Direkomendasikan | ⬜ Belum dieksekusi |
-| **REV-EP-09** | **#58 `GET /attendances/{id}`** — perjelas: mengembalikan **DTO admin** bila pemanggil punya `attendance.read_all`, **DTO employee** bila hanya `attendance.read_self`. Fase 4 § 4.6 hanya menyebut DTO lengkap untuk #60 | Fase 5 § 12 no. 3 | Fase 4 § 4.6 | Klarifikasi (bukan perubahan perilaku) | ⬜ Belum dieksekusi |
+| **REV-EP-04** | **#55 `GET /attendances/context`** — tambah `require_face_for_checkout`, `checkout_without_face_status`, `max_note_length` | Fase 6 § 12 no. 1 → **diulang** Fase 7 § 14 R1 | [Fase 4 § 4.4](05-Fase4.md#44-get-attendancescontext) | Direkomendasikan → naik jadi **Wajib** karena kontradiksi K-01 (§ 4) | ✅ Selesai dieksekusi (Fase 4, internal/attendance) |
+| **REV-EP-05** | **#55** — tambah `photo.recommended_dimension_px` (1280) dan `photo.max_dimension_px` (1920). Web mengasumsikan 1280×720 tetap; kamera ponsel 5–108 MP butuh target dari server | Fase 7 § 14 R2 | [Fase 4 § 4.4](05-Fase4.md#44-get-attendancescontext); [Fase 6 D24](07-Fase6.md#d24--parameter-capture--butuh-konfirmasi) | **Wajib** | ✅ Selesai dieksekusi (Fase 4, internal/attendance) |
+| **REV-EP-06** | **#55** — tambah objek `liveness`: `policy`, `max_attempts`, `challenge_count`, `timeout_seconds` | Fase 7 § 14 R4e | Fase 4 § 4.4 | **Wajib** | ✅ Selesai dieksekusi (Fase 4, internal/attendance) |
+| **REV-EP-07** | **#55** — tambah `geofence.mocked_location_policy` | Fase 7 § 14 R5e | Fase 4 § 4.4 | Direkomendasikan | ✅ Selesai dieksekusi (Fase 4, internal/attendance) |
+| **REV-EP-08** | **#53 / #54 `check-in` / `check-out`** — terima field request baru: `liveness_passed`, `liveness_supported`, `liveness_method`, `liveness_challenges`, `location_is_mocked` | Fase 7 § 14 R4d, R5d | [Fase 4 § 4.2](05-Fase4.md#42-post-attendancescheck-in) | R4d **Wajib**, R5d Direkomendasikan | ✅ Selesai dieksekusi (Fase 4, internal/attendance) |
+| **REV-EP-09** | **#58 `GET /attendances/{id}`** — perjelas: mengembalikan **DTO admin** bila pemanggil punya `attendance.read_all`, **DTO employee** bila hanya `attendance.read_self`. Fase 4 § 4.6 hanya menyebut DTO lengkap untuk #60 | Fase 5 § 12 no. 3 | Fase 4 § 4.6 | Klarifikasi (bukan perubahan perilaku) | ✅ Selesai dieksekusi (Fase 4, internal/attendance) |
 | **REV-EP-10** | **`GET /api/v1/version`** — tambah `min_supported_client` (mis. `{"mobile":"1.0.0"}`) agar app lama bisa menampilkan "Perbarui aplikasi" | Fase 7 § 14 R11 | [Fase 0 § 4](01-Fase0.md#4-daftar-endpoint) | Direkomendasikan | ⬜ Belum dieksekusi |
 | **REV-EP-11** | **Endpoint baru #73** `GET /api/v1/settings/face-quality-status` — bandingkan 7 ambang kualitas `face.*` di `app_settings` terhadap nilai aktif inference (`GET /ready` live), untuk kartu read-only + badge drift. Guard `settings.read` (permission sudah di-seed Fase 1, **tidak ada permission baru**) | Resolusi K-02 (§ 4) → [Fase 5 § 2.1](06-Fase5.md#21-fase-5-bukan-murni-frontend--2-endpoint-backend-baru) | Katalog endpoint; `routes.go`; `rbac_matrix_test.go` | **Wajib** | ⬜ Belum dieksekusi |
 
@@ -192,10 +192,10 @@ Katalog awal: **13 kode** ([Fase 0 § 2.6](01-Fase0.md#26-scaffolding-faceclock-
 | ID | Revisi | Asal | Terdampak | Sifat | Status |
 |---|---|---|---|---|---|
 | **REV-ERR-01** | **+12 kode Fase 3**: `CONSENT_REQUIRED` (403), `CONSENT_ALREADY_GRANTED` (409), `CONSENT_VERSION_OUTDATED` (409), `FACE_NOT_USABLE` (422), `DUPLICATE_PHOTO` (409), `ENROLLMENT_INCOMPLETE` (422), `ENROLLMENT_LIMIT_REACHED` (409), `ENROLLMENT_SESSION_EXPIRED` (409), `ENROLLMENT_MODEL_CHANGED` (409), `FACE_BELONGS_TO_ANOTHER_EMPLOYEE` (409), `REINDEX_IN_PROGRESS` (409), `ATTENDANCE_MODE_MANUAL` (422) | Fase 3 § 2.9 | Fase 0 § 2.6; `internal/httpx/errors.go`; `lib/errors/codes.ts`; `core/network/error_codes.dart` | Wajib | ✅ Selesai dieksekusi (Fase 3) |
-| **REV-ERR-02** | **+14 kode Fase 4**: `FACE_NOT_ENROLLED` (422), `FACE_NOT_MATCHED` (422), `OUTSIDE_GEOFENCE` (422), `LOCATION_REQUIRED` (422), `LOCATION_INACCURATE` (422), `ALREADY_CHECKED_IN` (409), `ALREADY_CHECKED_OUT` (409), `CHECKOUT_WITHOUT_CHECKIN` (409), `CHECKOUT_TOO_SOON` (409), `ATTENDANCE_ALREADY_REVIEWED` (409), `SELF_REVIEW_DENIED` (403), `EMPLOYEE_INACTIVE` (403), `TOO_MANY_FAILED_ATTEMPTS` (429), `ATTENDANCE_NOT_CONFIGURED` (503, **dipersempit** — lihat REV-ERR-06) | Fase 4 § 2.10 | idem | Wajib | ⬜ Belum dieksekusi |
-| **REV-ERR-03** | **+1 kode Fase 7**: `LIVENESS_REQUIRED` — **HTTP 422**. Muncul hanya bila `attendance.liveness_policy='required'` dan `liveness_passed != true`. Response **wajib** menyertakan `can_fallback` (nilainya `attendance.fallback_enabled`) | Fase 7 § 14 R7 | Fase 0 § 2.6 | **Wajib** | ⬜ Belum dieksekusi |
+| **REV-ERR-02** | **+14 kode Fase 4**: `FACE_NOT_ENROLLED` (422), `FACE_NOT_MATCHED` (422), `OUTSIDE_GEOFENCE` (422), `LOCATION_REQUIRED` (422), `LOCATION_INACCURATE` (422), `ALREADY_CHECKED_IN` (409), `ALREADY_CHECKED_OUT` (409), `CHECKOUT_WITHOUT_CHECKIN` (409), `CHECKOUT_TOO_SOON` (409), `ATTENDANCE_ALREADY_REVIEWED` (409), `SELF_REVIEW_DENIED` (403), `EMPLOYEE_INACTIVE` (403), `TOO_MANY_FAILED_ATTEMPTS` (429), `ATTENDANCE_NOT_CONFIGURED` (503, **dipersempit** — lihat REV-ERR-06) | Fase 4 § 2.10 | idem | Wajib | ✅ Selesai dieksekusi (Fase 4, internal/httpx/errors.go) |
+| **REV-ERR-03** | **+1 kode Fase 7**: `LIVENESS_REQUIRED` — **HTTP 422**. Muncul hanya bila `attendance.liveness_policy='required'` dan `liveness_passed != true`. Response **wajib** menyertakan `can_fallback` (nilainya `attendance.fallback_enabled`) | Fase 7 § 14 R7 | Fase 0 § 2.6 | **Wajib** | ✅ Selesai dieksekusi (Fase 4, internal/httpx/errors.go) |
 | **REV-ERR-04** | **Status HTTP 410 Gone** masuk katalog, dipakai khusus untuk foto yang sudah dihapus kebijakan retensi, dengan `code: "NOT_FOUND"` agar client lama tetap menanganinya | Fase 3 § 4.4; dipakai ulang Fase 4 § 6.5 E38 | Fase 0 § 2.6; `docs/adr/0003-api-conventions.md` | Wajib | ✅ Selesai dieksekusi (Fase 3) |
-| **REV-ERR-05** | **Cakupan field `can_fallback`.** Fase 4 § 4.2 hanya mencontohkannya pada `FACE_NOT_MATCHED`. Dinyatakan berlaku pada: `FACE_NOT_MATCHED`, `FACE_NOT_USABLE`, `FACE_NOT_ENROLLED`, `LIVENESS_REQUIRED`, `502 UPSTREAM_ERROR`, `504 UPSTREAM_TIMEOUT` | Fase 6 § 12 no. 2 → **diulang** Fase 7 § 14 R8 (masih terbuka) | Fase 4 § 4.2 | **Wajib** — tanpa ini client menduplikasi logika server | ⬜ Belum dieksekusi |
+| **REV-ERR-05** | **Cakupan field `can_fallback`.** Fase 4 § 4.2 hanya mencontohkannya pada `FACE_NOT_MATCHED`. Dinyatakan berlaku pada: `FACE_NOT_MATCHED`, `FACE_NOT_USABLE`, `FACE_NOT_ENROLLED`, `LIVENESS_REQUIRED`, `502 UPSTREAM_ERROR`, `504 UPSTREAM_TIMEOUT` | Fase 6 § 12 no. 2 → **diulang** Fase 7 § 14 R8 (masih terbuka) | Fase 4 § 4.2 | **Wajib** — tanpa ini client menduplikasi logika server | ✅ Selesai dieksekusi (Fase 4, internal/attendance) |
 | **REV-ERR-06** | **+1 kode baru**: `FACE_SERVICE_NOT_CONFIGURED` (503) — akar masalah "`face.model_version = 'unset'`, Fase 2 belum dikalibrasi". Dipakai bersama oleh `#38` (Fase 3), `#53`/`#54` (Fase 4), menggantikan `SERVICE_UNAVAILABLE` di `#38` dan mengeluarkan kondisi ini dari `ATTENDANCE_NOT_CONFIGURED` di `#53`/`#54` (yang sebelumnya menggabungkan dua akar masalah tak-terkait — lihat REV-ERR-02) | Resolusi K-04 (§ 4) | [Fase 3 § 2.9](04-Fase3.md#29-error-code-tambahan-registrasi-resmi-ke-katalog-fase-0) + § 4.3; [Fase 4 § 2.10](05-Fase4.md#210-error-code-tambahan-registrasi-resmi-ke-katalog-fase-0) + § 4.2; `internal/httpx/errors.go`; `lib/errors/codes.ts`; `core/network/error_codes.dart` | **Wajib** | ✅ Selesai dieksekusi (Fase 3, didaftarkan & dipakai di #38) |
 
 > **Total katalog error setelah revisi: 41 kode** (13 + 12 + 14 + 1 + 1), ditambah
@@ -225,11 +225,11 @@ Seed awal: **11 key** ([Fase 1 § 3.9](02-Fase1.md#39-app_settings--migration-00
 |---|---|---|---|---|---|
 | **REV-SET-01** | **+10 key `face.*`**: `det_size`, `min_det_score`, `min_blur_var`, `min_brightness`, `max_brightness`, `min_face_ratio`, `max_abs_yaw`, `max_abs_pitch`, `max_image_bytes`, `accepted_mime_types`. Berstatus **salinan tampilan** — sumber kebenaran tetap env container inference | Fase 2 § 3.1 (inline, baru terkonsolidasi di sini) | Migration 000011 | Scope fase (dicatat untuk kelengkapan katalog) | ✅ Selesai dieksekusi (Fase 2, migration 000011) |
 | **REV-SET-02** | **+7 key `face.*`**: `max_reference_photos`, `enrollment_session_ttl_minutes`, `min_quality_score`, `duplicate_check_enabled`, `duplicate_threshold`, `retention_days_after_resign`, `consent_required` | Fase 3 § 3.8 | Migration 000017 | Wajib | ✅ Selesai dieksekusi (Fase 3, migration 000017) |
-| **REV-SET-03** | **+15 key `attendance.*`**: `workday_cutoff_hour`, `fallback_enabled`, `outside_geofence_policy`, `missing_location_policy`, `max_gps_accuracy_meter`, `allow_checkout_without_checkin`, `min_minutes_between_checkin_checkout`, `require_face_for_checkout`, `checkout_without_face_status`, `allow_fallback_without_enrollment`, `max_note_length`, `max_failed_attempts_per_hour`, `photo_retention_days`, `attempt_retention_days`, `duplicate_photo_window_days` | Fase 4 § 3.5 | Migration 000021 | Wajib | ⬜ Belum dieksekusi |
-| **REV-SET-04** | **Rekonsiliasi makna `attendance.max_distance_meter`.** Fase 1 men-seed-nya sebagai radius geofence; sejak Fase 4 ia menjadi **batas atas + nilai default** `office_locations.radius_meter`. Radius efektif ditentukan per lokasi. Deskripsi baris di-`UPDATE` | Fase 4 § 2.1 (dinyatakan eksplisit sebagai "revisi kecil kontrak Fase 1") | [Fase 1 § 3.9](02-Fase1.md#39-app_settings--migration-000010); migration 000021 | Wajib | ⬜ Belum dieksekusi |
+| **REV-SET-03** | **+15 key `attendance.*`**: `workday_cutoff_hour`, `fallback_enabled`, `outside_geofence_policy`, `missing_location_policy`, `max_gps_accuracy_meter`, `allow_checkout_without_checkin`, `min_minutes_between_checkin_checkout`, `require_face_for_checkout`, `checkout_without_face_status`, `allow_fallback_without_enrollment`, `max_note_length`, `max_failed_attempts_per_hour`, `photo_retention_days`, `attempt_retention_days`, `duplicate_photo_window_days` | Fase 4 § 3.5 | Migration 000021 | Wajib | ✅ Selesai dieksekusi (Fase 4, migration 000021) |
+| **REV-SET-04** | **Rekonsiliasi makna `attendance.max_distance_meter`.** Fase 1 men-seed-nya sebagai radius geofence; sejak Fase 4 ia menjadi **batas atas + nilai default** `office_locations.radius_meter`. Radius efektif ditentukan per lokasi. Deskripsi baris di-`UPDATE` | Fase 4 § 2.1 (dinyatakan eksplisit sebagai "revisi kecil kontrak Fase 1") | [Fase 1 § 3.9](02-Fase1.md#39-app_settings--migration-000010); migration 000021 | Wajib | ✅ Selesai dieksekusi (Fase 4, migration 000021) |
 | **REV-SET-05** | **+1 key** `attendance.export_max_rows` (default 100000) | Fase 5 § 2.1, § 12 no. 4 | Migration Fase 5 | Tambahan | ⬜ Belum dieksekusi |
-| **REV-SET-06** | **+4 key liveness**: `attendance.liveness_policy` (`off`\|`preferred`\|`required`, default `preferred`), `liveness_max_attempts` (3), `liveness_challenge_count` (2), `liveness_timeout_seconds` (20) | Fase 7 § 14 R4e | Migration 000021 (Fase 4) | **Wajib** | ⬜ Belum dieksekusi |
-| **REV-SET-07** | **+1 key** `attendance.mocked_location_policy` (`reject`\|`pending_review`, default `reject`) | Fase 7 § 14 R5e | Migration 000021 (Fase 4) | Direkomendasikan | ⬜ Belum dieksekusi |
+| **REV-SET-06** | **+4 key liveness**: `attendance.liveness_policy` (`off`\|`preferred`\|`required`, default `preferred`), `liveness_max_attempts` (3), `liveness_challenge_count` (2), `liveness_timeout_seconds` (20) | Fase 7 § 14 R4e | Migration 000021 (Fase 4) | **Wajib** | ✅ Selesai dieksekusi (Fase 4, migration 000021) |
+| **REV-SET-07** | **+1 key** `attendance.mocked_location_policy` (`reject`\|`pending_review`, default `reject`) | Fase 7 § 14 R5e | Migration 000021 (Fase 4) | Direkomendasikan | ✅ Selesai dieksekusi (Fase 4, migration 000021) |
 | **REV-SET-08** | **+1 key** `auth.refresh_reuse_grace_seconds` (default 30) — pendamping REV-AUTH-01 | Fase 7 § 14 R3 | Migration Fase 1 (bersama `refresh_tokens`) | **Wajib** | ⬜ Belum dieksekusi |
 
 > **Total `app_settings` setelah revisi: 50 key** (11 + 10 + 7 + 15 + 1 + 4 + 1 + 1).
@@ -260,7 +260,7 @@ berikut **sudah disetujui** di dokumen sumbernya dan wajib dicatat di
 | ID | Pengecualian | Asal | Alasan | Sifat | Status |
 |---|---|---|---|---|---|
 | **REV-CONV-01** | `audit_logs.id` memakai **`bigint GENERATED ALWAYS AS IDENTITY`**, bukan `uuid` | Fase 1 § 3.8 (inline, baru terkonsolidasi di sini) | Tabel append-only, sangat banyak baris, dan urutan sisipnya bermakna | Pengecualian disetujui | ✅ Selesai dieksekusi (Fase 1, migration 000009) |
-| **REV-CONV-02** | `attendance_attempts.id` memakai **`bigint identity`** | Fase 4 § 3.4 | Alasan identik dengan REV-CONV-01 | Pengecualian disetujui | ⬜ Belum dieksekusi |
+| **REV-CONV-02** | `attendance_attempts.id` memakai **`bigint identity`** | Fase 4 § 3.4 | Alasan identik dengan REV-CONV-01 | Pengecualian disetujui | ✅ Selesai dieksekusi (Fase 4, migration 000020) |
 | **REV-CONV-03** | `face_references` **tanpa `deleted_at`**. Siklus hidupnya `is_active`; penghapusan permanen adalah hard delete lewat prosedur PDP | Fase 3 § 3.4, § 2.8 | Baris yang "dihapus" tapi masih menyimpan embedding bukan penghapusan data biometrik dalam pengertian mana pun | Pengecualian disetujui | ✅ Selesai dieksekusi (Fase 2, migration 000011) |
 
 ### H. Perubahan perilaku auth & token
@@ -299,7 +299,7 @@ dibaca semua sisi, tanpa distribusi paket berversi.
 |---|---|---|---|---|---|
 | **REV-CTR-01** | **Berkas kanonik `docs/api/hints.json`** untuk 9 kalimat `hints` + katalog pesan error. Saat ini kalimat yang sama akan hidup di `internal/inference/hints.go` (Go), `lib/errors/hints.ts` (TS), dan `core/messages/hints.dart` (Dart) — tiga sumber kebenaran yang pasti menyimpang | Fase 5 § 12 no. 7 → **diulang** Fase 6 § 12 no. 5 (naik urgensinya) | [Fase 2 § 2.5](03-Fase2.md#25-kontrak-kualitas--kosakata-hints); Fase 5, 6, 7 | Saran → naik jadi **Wajib** setelah Fase 7 (tiga consumer) | ✅ Selesai dieksekusi (Fase 2, docs/api/hints.json terisi 9 server hints) |
 | **REV-CTR-02** | **Struktur `hints.json` dengan namespace terpisah**: `server_hints` (kosakata **tertutup** Fase 2 — tidak boleh ditambah dari client) dan `client_coach` (kalimat liveness khas mobile: `liveness_blink`, `liveness_smile`, `liveness_hold_still`, `liveness_face_lost`, `liveness_multiple_faces`, `liveness_too_far`, `liveness_timeout`, `liveness_unsupported`) | Fase 7 § 14 R6 | REV-CTR-01; [Fase 2 § 2.5](03-Fase2.md#25-kontrak-kualitas--kosakata-hints) | **Wajib** — tanpa pemisahan, kalimat liveness mencemari kosakata tertutup | ✅ Selesai dieksekusi (Fase 2, docs/api/hints.json terisi namespace terpisah) |
-| **REV-CTR-03** | **Berkas `docs/api/geo-testcases.json`** — kasus uji haversine dibaca sisi Go (`internal/geo`) dan TS (`lib/geo`) supaya jarak yang ditampilkan sebelum kirim identik dengan yang dihitung server | Fase 6 § 12 no. 4 | [Fase 4 § 7](05-Fase4.md#7-struktur-folder) | Tambahan (test saja) | ⬜ Belum dieksekusi |
+| **REV-CTR-03** | **Berkas `docs/api/geo-testcases.json`** — kasus uji haversine dibaca sisi Go (`internal/geo`) dan TS (`lib/geo`) supaya jarak yang ditampilkan sebelum kirim identik dengan yang dihitung server | Fase 6 § 12 no. 4 | [Fase 4 § 7](05-Fase4.md#7-struktur-folder) | Tambahan (test saja) | ✅ Selesai dieksekusi (Fase 4, internal/geo/haversine_test.go) |
 
 ### K. Perubahan UI / DTO
 
@@ -596,27 +596,27 @@ yang HARUS sudah tercermin di kode sebelum fase itu dinyatakan selesai?*
 
 ### Fase 4 — Attendance Engine ⛔ fase dengan beban revisi terberat
 
-| Harus sudah ada | Kenapa di sini |
-|---|---|
-| **REV-DB-03** — `attendances.photo_key` | Tabel dibuat di sini |
-| **REV-DB-04** — 4 kolom liveness pada `attendances` | ⛔ **Dilaporkan Fase 7, tapi tabelnya dibuat di sini.** Masukkan ke migration 000019 sejak awal |
-| **REV-DB-05** — `attendances.location_is_mocked` | idem |
-| **REV-DB-06** — `fallback_reason` CHECK dengan `liveness_failed` + `location_mocked` | idem — CHECK constraint lebih mahal diubah belakangan daripada ditulis benar sejak awal |
-| **REV-DB-07** — `attendance_attempts.outcome` CHECK +2 nilai | Migration 000020 |
-| **REV-CONV-02** — `attendance_attempts.id` `bigint identity` | idem |
-| **REV-ERR-02** — 14 kode error Fase 4, dengan `ATTENDANCE_NOT_CONFIGURED` **dipersempit** khusus geofence tanpa lokasi aktif | idem |
-| **REV-ERR-06** — `FACE_SERVICE_NOT_CONFIGURED` dipakai `#53`/`#54` untuk kondisi model belum dikalibrasi (dipecah dari `ATTENDANCE_NOT_CONFIGURED`, K-04) | Registrasi resmi kode ini ada di sini; `#38` Fase 3 memakainya lebih dulu (lihat catatan di bagian Fase 3) |
-| **REV-ERR-03** — `LIVENESS_REQUIRED` | Kode ini dilempar oleh handler check-in Fase 4 |
-| **REV-ERR-05** — `can_fallback` pada 6 kondisi | Handler check-in Fase 4 yang menyusunnya |
-| **REV-SET-03** — 15 key `attendance.*` | Migration 000021 |
-| **REV-SET-06** — 4 key liveness | ⛔ Migration 000021, bukan migration Fase 7 |
-| **REV-SET-07** — `mocked_location_policy` | idem |
-| **REV-EP-04** — `#55` +3 field (wajib karena K-01) | Endpoint dibuat di sini |
-| **REV-EP-05** — `#55` +2 field dimensi foto | idem |
-| **REV-EP-06/07** — `#55` +objek liveness, +`mocked_location_policy` | idem |
-| **REV-EP-08** — `#53/#54` menerima field liveness & mock | idem |
-| **REV-EP-09** — `#58` varian DTO per permission | idem |
-| **REV-CTR-03** — `geo-testcases.json` diisi | `internal/geo` ditulis di sini |
+| Harus sudah ada | Kenapa di sini | Status |
+|---|---|---|
+| **REV-DB-03** — `attendances.photo_key` | Tabel dibuat di sini | ✅ Selesai dieksekusi (migration 000019) |
+| **REV-DB-04** — 4 kolom liveness pada `attendances` | ⛔ **Dilaporkan Fase 7, tapi tabelnya dibuat di sini.** Masukkan ke migration 000019 sejak awal | ✅ Selesai dieksekusi (migration 000019) |
+| **REV-DB-05** — `attendances.location_is_mocked` | idem | ✅ Selesai dieksekusi (migration 000019) |
+| **REV-DB-06** — `fallback_reason` CHECK dengan `liveness_failed` + `location_mocked` | idem — CHECK constraint lebih mahal diubah belakangan daripada ditulis benar sejak awal | ✅ Selesai dieksekusi (migration 000019) |
+| **REV-DB-07** — `attendance_attempts.outcome` CHECK +2 nilai | Migration 000020 | ✅ Selesai dieksekusi (migration 000020) |
+| **REV-CONV-02** — `attendance_attempts.id` `bigint identity` | idem | ✅ Selesai dieksekusi (migration 000020) |
+| **REV-ERR-02** — 14 kode error Fase 4, dengan `ATTENDANCE_NOT_CONFIGURED` **dipersempit** khusus geofence tanpa lokasi aktif | idem | ✅ Selesai dieksekusi (internal/httpx/errors.go) |
+| **REV-ERR-06** — `FACE_SERVICE_NOT_CONFIGURED` dipakai `#53`/`#54` untuk kondisi model belum dikalibrasi (dipecah dari `ATTENDANCE_NOT_CONFIGURED`, K-04) | Registrasi resmi kode ini ada di sini; `#38` Fase 3 memakainya lebih dulu (lihat catatan di bagian Fase 3) | ✅ Selesai dieksekusi (internal/httpx/errors.go) |
+| **REV-ERR-03** — `LIVENESS_REQUIRED` | Kode ini dilempar oleh handler check-in Fase 4 | ✅ Selesai dieksekusi (internal/httpx/errors.go) |
+| **REV-ERR-05** — `can_fallback` pada 6 kondisi | Handler check-in Fase 4 yang menyusunnya | ✅ Selesai dieksekusi (internal/attendance) |
+| **REV-SET-03** — 15 key `attendance.*` | Migration 000021 | ✅ Selesai dieksekusi (migration 000021) |
+| **REV-SET-06** — 4 key liveness | ⛔ Migration 000021, bukan migration Fase 7 | ✅ Selesai dieksekusi (migration 000021) |
+| **REV-SET-07** — `mocked_location_policy` | idem | ✅ Selesai dieksekusi (migration 000021) |
+| **REV-EP-04** — `#55` +3 field (wajib karena K-01) | Endpoint dibuat di sini | ✅ Selesai dieksekusi (internal/attendance) |
+| **REV-EP-05** — `#55` +2 field dimensi foto | idem | ✅ Selesai dieksekusi (internal/attendance) |
+| **REV-EP-06/07** — `#55` +objek liveness, +`mocked_location_policy` | idem | ✅ Selesai dieksekusi (internal/attendance) |
+| **REV-EP-08** — `#53/#54` menerima field liveness & mock | idem | ✅ Selesai dieksekusi (internal/attendance) |
+| **REV-EP-09** — `#58` varian DTO per permission | idem | ✅ Selesai dieksekusi (internal/attendance) |
+| **REV-CTR-03** — `geo-testcases.json` diisi | `internal/geo` ditulis di sini | ✅ Selesai dieksekusi (internal/geo) |
 
 > **Ini yang paling mudah terlewat.** Tujuh belas revisi menyentuh Fase 4 (enam
 > belas dari konsolidasi 2026-09-04, +1 REV-ERR-06 dari resolusi K-04 pada

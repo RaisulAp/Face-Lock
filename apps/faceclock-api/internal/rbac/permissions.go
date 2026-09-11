@@ -42,9 +42,12 @@ const (
 
 	// Attendance permissions
 	PermAttendanceCheckin  = "attendance.checkin"
+	PermAttendanceCreate   = "attendance.create"
 	PermAttendanceReadSelf = "attendance.read_self"
 	PermAttendanceReadAll  = "attendance.read_all"
+	PermAttendanceReadTeam = "attendance.read_team"
 	PermAttendanceApprove  = "attendance.approve"
+	PermAttendanceReview   = "attendance.review"
 	PermAttendanceExport   = "attendance.export"
 
 	// Location permissions
@@ -52,6 +55,7 @@ const (
 	PermLocationCreate = "location.create"
 	PermLocationUpdate = "location.update"
 	PermLocationDelete = "location.delete"
+	PermLocationManage = "location.manage"
 )
 
 type PermissionDef struct {

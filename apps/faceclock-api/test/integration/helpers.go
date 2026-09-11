@@ -27,6 +27,7 @@ import (
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/health"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/httpx"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/inference"
+	"github.com/faceclock/faceclock/apps/faceclock-api/internal/location"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/platform/logger"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/rbac"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/role"
@@ -159,8 +160,11 @@ func SetupTestApp(t *testing.T) *TestApp {
 	empSvc := employee.NewService(pool)
 	empSvc.SetFaceBiometrics(mockFaceEngine, store)
 
-	attendanceSvc := attendance.NewService(pool, mockFaceEngine, store)
+	attendanceSvc := attendance.NewService(pool, mockFaceEngine, store, settingsSvc)
 	attendanceHandler := attendance.NewHandler(attendanceSvc, auditRec)
+
+	locationSvc := location.NewService(pool, settingsSvc, auditRec)
+	locationHandler := location.NewHandler(locationSvc, auditRec)
 
 	userSvc := user.NewService(pool, rbacSvc)
 	roleSvc := role.NewService(pool, rbacSvc)
@@ -273,6 +277,28 @@ func SetupTestApp(t *testing.T) *TestApp {
 			FaceReindexListJobs:  reindexHandler.ListJobs,
 			FaceReindexGetJob:    reindexHandler.GetJob,
 			FaceReindexCancelJob: reindexHandler.CancelJob,
+
+			// Fase 4: Attendance Engine (#53 - #65)
+			AttendancesClockIn:   attendanceHandler.ClockIn,
+			AttendancesClockOut:  attendanceHandler.ClockOut,
+			AttendanceContext:    attendanceHandler.GetContext,
+			AttendanceMe:         attendanceHandler.GetMe,
+			AttendanceMeToday:    attendanceHandler.GetMeToday,
+			AttendanceGetByID:    attendanceHandler.GetRecordByID,
+			AttendanceGetPhoto:   attendanceHandler.GetPhoto,
+			AttendanceList:       attendanceHandler.GetAdminRecords,
+			AttendancePending:    attendanceHandler.GetPendingRecords,
+			AttendanceApprove:    attendanceHandler.ApproveRecord,
+			AttendanceReject:     attendanceHandler.RejectRecord,
+			AttendanceBulkReview: attendanceHandler.BulkReviewRecords,
+			AttendanceAttempts:   attendanceHandler.GetAttempts,
+
+			// Fase 4: Office Locations (#66 - #70)
+			LocationList:    locationHandler.List,
+			LocationCreate:  locationHandler.Create,
+			LocationGetByID: locationHandler.GetByID,
+			LocationUpdate:  locationHandler.Update,
+			LocationDelete:  locationHandler.Delete,
 		},
 	})
 

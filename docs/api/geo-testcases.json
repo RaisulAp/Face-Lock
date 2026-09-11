@@ -1,4 +1,41 @@
 {
-  "_note": "Kerangka kanonik dibuat di Fase 0 (REV-CTR-03). Kasus uji haversine diisi Fase 4 (Plan/05-Fase4.md § 7), dibaca oleh internal/geo (Go) dan lib/geo (TS) supaya jarak yang ditampilkan client sebelum kirim identik dengan yang dihitung server.",
-  "cases": []
+  "_note": "Canonical test cases for Haversine (R=6371008.8m) evaluated identically in Go and TypeScript (Plan/05-Fase4.md § 7).",
+  "cases": [
+    {
+      "name": "zero_distance",
+      "lat1": -6.2088,
+      "lon1": 106.8456,
+      "lat2": -6.2088,
+      "lon2": 106.8456,
+      "expected_meter": 0.0,
+      "tolerance_meter": 0.01
+    },
+    {
+      "name": "jakarta_to_bandung",
+      "lat1": -6.2088,
+      "lon1": 106.8456,
+      "lat2": -6.9175,
+      "lon2": 107.6191,
+      "expected_meter": 119565.0,
+      "tolerance_meter": 500.0
+    },
+    {
+      "name": "meridian_180_crossing",
+      "lat1": 0.0,
+      "lon1": 179.999,
+      "lat2": 0.0,
+      "lon2": -179.999,
+      "expected_meter": 222.4,
+      "tolerance_meter": 1.0
+    },
+    {
+      "name": "equator_one_degree",
+      "lat1": 0.0,
+      "lon1": 0.0,
+      "lat2": 0.0,
+      "lon2": 1.0,
+      "expected_meter": 111195.0,
+      "tolerance_meter": 10.0
+    }
+  ]
 }

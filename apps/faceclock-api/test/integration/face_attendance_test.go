@@ -50,6 +50,7 @@ func TestFaceEnrollmentAndAttendance_Integration(t *testing.T) {
 
 	// Sample mock photo payloads
 	facePhotoA := []byte("face_photo_of_alice_in_wonderland_high_res_sample_data_123")
+	facePhotoA2 := []byte("face_photo_of_alice_in_wonderland_sample_evening_distinct_456")
 	facePhotoB := []byte("face_photo_of_bob_the_builder_completely_different_face_789")
 
 	// -------------------------------------------------------------
@@ -215,14 +216,14 @@ func TestFaceEnrollmentAndAttendance_Integration(t *testing.T) {
 			t.Fatalf("expected 422 Unprocessable Entity on face mismatch, got %d: %s", res.StatusCode, string(body))
 		}
 
-		// Verify that a failed record was recorded in attendances
+		// Verify that a failed record was recorded in attendance_attempts telemetry
 		var failedCount int
 		_ = app.Pool.QueryRow(ctx, `
-			SELECT COUNT(*) FROM attendances
-			WHERE employee_id = $1 AND status = 'failed'
+			SELECT COUNT(*) FROM attendance_attempts
+			WHERE employee_id = $1 AND outcome = 'below_threshold'
 		`, empID1).Scan(&failedCount)
 		if failedCount < 1 {
-			t.Errorf("expected failed attendance record to be logged, got %d", failedCount)
+			t.Errorf("expected failed attendance record to be logged in attempts, got %d", failedCount)
 		}
 	})
 
@@ -249,25 +250,30 @@ func TestFaceEnrollmentAndAttendance_Integration(t *testing.T) {
 
 		var respData struct {
 			Data struct {
-				ID              string  `json:"id"`
-				Type            string  `json:"type"`
-				Status          string  `json:"status"`
-				SimilarityScore float32 `json:"similarity_score"`
-				Distance        float32 `json:"distance"`
+				ID     string `json:"id"`
+				Type   string `json:"type"`
+				Status string `json:"status"`
 			} `json:"data"`
 		}
 		if err := json.Unmarshal(body, &respData); err != nil {
 			t.Fatalf("failed decoding json response: %v", err)
 		}
 
-		if respData.Data.Status != "success" {
-			t.Errorf("expected status 'success', got '%s'", respData.Data.Status)
+		if respData.Data.Type != "check_in" {
+			t.Errorf("expected clock type 'check_in', got '%s'", respData.Data.Type)
 		}
-		if respData.Data.Type != "in" {
-			t.Errorf("expected clock type 'in', got '%s'", respData.Data.Type)
+		if respData.Data.Status != "approved" {
+			t.Errorf("expected status 'approved', got '%s'", respData.Data.Status)
 		}
-		if respData.Data.SimilarityScore < 0.75 {
-			t.Errorf("expected face similarity >= 0.75, got %f", respData.Data.SimilarityScore)
+
+		// Verify face similarity recorded in database (anti-score leakage ensures it is not leaked in employee response)
+		var recordedSim float64
+		sErr := app.Pool.QueryRow(ctx, `SELECT matched_similarity FROM attendances WHERE id = $1`, respData.Data.ID).Scan(&recordedSim)
+		if sErr != nil {
+			t.Fatalf("querying attendance similarity failed: %v", sErr)
+		}
+		if recordedSim < 0.75 {
+			t.Errorf("expected face similarity >= 0.75, got %f", recordedSim)
 		}
 
 		// Verify audit log for attendance.clock_in
@@ -288,8 +294,20 @@ func TestFaceEnrollmentAndAttendance_Integration(t *testing.T) {
 	// Test Clock-Out with Matching Face (Success 201)
 	// -------------------------------------------------------------
 	t.Run("Clock-out with matching face succeeds", func(t *testing.T) {
+		// Enroll second photo for empID1 to avoid anti-replay photo SHA256 collision
+		enrollURL := fmt.Sprintf("/api/v1/employees/%s/face-enroll", empID1.String())
+		reqEnroll, _ := http.NewRequest(http.MethodPost, enrollURL, bytes.NewReader(facePhotoA2))
+		reqEnroll.Header.Set("Content-Type", "image/jpeg")
+		resEnroll, bodyEnroll := executeWithCookie(app, reqEnroll, empUser1.Token, true)
+		if resEnroll.StatusCode != http.StatusCreated {
+			t.Fatalf("evening face enrollment failed: %d: %s", resEnroll.StatusCode, string(bodyEnroll))
+		}
+
+		// Update check-in timestamp to 10 minutes ago so minimum interval check passes
+		_, _ = app.Pool.Exec(ctx, "UPDATE attendances SET server_timestamp = NOW() - INTERVAL '10 minutes' WHERE employee_id = $1", empID1)
+
 		clockOutPayload, _ := json.Marshal(map[string]any{
-			"photo_base64": base64.StdEncoding.EncodeToString(facePhotoA),
+			"photo_base64": base64.StdEncoding.EncodeToString(facePhotoA2),
 			"latitude":     -6.2088,
 			"longitude":    106.8456,
 			"accuracy":     10.0,
@@ -315,11 +333,11 @@ func TestFaceEnrollmentAndAttendance_Integration(t *testing.T) {
 			t.Fatalf("failed decoding json response: %v", err)
 		}
 
-		if respData.Data.Status != "success" {
-			t.Errorf("expected status 'success', got '%s'", respData.Data.Status)
+		if respData.Data.Type != "check_out" {
+			t.Errorf("expected clock type 'check_out', got '%s'", respData.Data.Type)
 		}
-		if respData.Data.Type != "out" {
-			t.Errorf("expected clock type 'out', got '%s'", respData.Data.Type)
+		if respData.Data.Status != "approved" {
+			t.Errorf("expected status 'approved', got '%s'", respData.Data.Status)
 		}
 	})
 

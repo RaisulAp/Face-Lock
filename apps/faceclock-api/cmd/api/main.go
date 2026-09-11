@@ -34,6 +34,7 @@ import (
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/health"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/httpx"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/inference"
+	"github.com/faceclock/faceclock/apps/faceclock-api/internal/location"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/platform/logger"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/platform/postgres"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/rbac"
@@ -135,7 +136,7 @@ func main() {
 	empSvc.SetFaceBiometrics(faceEngine, store)
 	empHandler := employee.NewHandler(empSvc, auditRecorder)
 
-	attendanceSvc := attendance.NewService(pool, faceEngine, store)
+	attendanceSvc := attendance.NewService(pool, faceEngine, store, settingsSvc)
 	attendanceHandler := attendance.NewHandler(attendanceSvc, auditRecorder)
 
 	userSvc := user.NewService(pool, rbacSvc)
@@ -168,6 +169,13 @@ func main() {
 	reindexHandler := reindex.NewHandler(reindexSvc)
 	reindexWorker := reindex.NewWorker(reindexRepo, store, inferenceClient, settingsSvc, auditRecorder, log, 10*time.Second)
 	reindexWorker.Start(ctx)
+
+	// Fase 4: Office Locations & Attendance Retention Worker
+	locSvc := location.NewService(pool, settingsSvc, auditRecorder)
+	locHandler := location.NewHandler(locSvc, auditRecorder)
+
+	attendanceRetention := attendance.NewRetentionJob(pool, store, settingsSvc, auditRecorder, log)
+	attendanceRetention.Start(ctx, 1*time.Hour)
 
 	// Housekeeping job for expired refresh tokens (§ 3.7)
 	go func() {
@@ -266,6 +274,28 @@ func main() {
 			FaceReindexListJobs:  reindexHandler.ListJobs,
 			FaceReindexGetJob:    reindexHandler.GetJob,
 			FaceReindexCancelJob: reindexHandler.CancelJob,
+
+			// Fase 4: Attendance Engine (#53 - #65)
+			AttendancesClockIn:   attendanceHandler.ClockIn,
+			AttendancesClockOut:  attendanceHandler.ClockOut,
+			AttendanceContext:    attendanceHandler.GetContext,
+			AttendanceMe:         attendanceHandler.GetMe,
+			AttendanceMeToday:    attendanceHandler.GetMeToday,
+			AttendanceGetByID:    attendanceHandler.GetRecordByID,
+			AttendanceGetPhoto:   attendanceHandler.GetPhoto,
+			AttendanceList:       attendanceHandler.GetAdminRecords,
+			AttendancePending:    attendanceHandler.GetPendingRecords,
+			AttendanceApprove:    attendanceHandler.ApproveRecord,
+			AttendanceReject:     attendanceHandler.RejectRecord,
+			AttendanceBulkReview: attendanceHandler.BulkReviewRecords,
+			AttendanceAttempts:   attendanceHandler.GetAttempts,
+
+			// Fase 4: Office Locations (#66 - #70)
+			LocationList:    locHandler.List,
+			LocationCreate:  locHandler.Create,
+			LocationGetByID: locHandler.GetByID,
+			LocationUpdate:  locHandler.Update,
+			LocationDelete:  locHandler.Delete,
 		},
 	})
 

@@ -90,6 +90,28 @@ type Handlers struct {
 	FaceReindexListJobs  http.HandlerFunc
 	FaceReindexGetJob    http.HandlerFunc
 	FaceReindexCancelJob http.HandlerFunc
+
+	// Fase 4: Attendance Engine (#53 - #65)
+	AttendancesClockIn   http.HandlerFunc
+	AttendancesClockOut  http.HandlerFunc
+	AttendanceContext    http.HandlerFunc
+	AttendanceMe         http.HandlerFunc
+	AttendanceMeToday    http.HandlerFunc
+	AttendanceGetByID    http.HandlerFunc
+	AttendanceGetPhoto   http.HandlerFunc
+	AttendanceList       http.HandlerFunc
+	AttendancePending    http.HandlerFunc
+	AttendanceApprove    http.HandlerFunc
+	AttendanceReject     http.HandlerFunc
+	AttendanceBulkReview http.HandlerFunc
+	AttendanceAttempts   http.HandlerFunc
+
+	// Fase 4: Office Locations (#66 - #70)
+	LocationList    http.HandlerFunc
+	LocationCreate  http.HandlerFunc
+	LocationGetByID http.HandlerFunc
+	LocationUpdate  http.HandlerFunc
+	LocationDelete  http.HandlerFunc
 }
 
 // RouterDeps is every dependency the router needs to wire the middleware
@@ -357,6 +379,64 @@ func mountAPIv1(r chi.Router, deps RouterDeps) {
 			}
 			if deps.Handlers.FaceReindexCancelJob != nil {
 				r.With(rbacGuard(deps, "face.reindex")).Post("/face/reindex-jobs/{id}/cancel", deps.Handlers.FaceReindexCancelJob)
+			}
+
+			// Fase 4: Attendance Engine (#53 - #65)
+			if deps.Handlers.AttendancesClockIn != nil {
+				r.With(rbacGuard(deps, "attendance.checkin")).Post("/attendances/clock-in", deps.Handlers.AttendancesClockIn)
+			}
+			if deps.Handlers.AttendancesClockOut != nil {
+				r.With(rbacGuard(deps, "attendance.checkin")).Post("/attendances/clock-out", deps.Handlers.AttendancesClockOut)
+			}
+			if deps.Handlers.AttendanceContext != nil {
+				r.With(rbacGuard(deps, "attendance.checkin")).Get("/attendances/context", deps.Handlers.AttendanceContext)
+			}
+			if deps.Handlers.AttendanceMe != nil {
+				r.With(rbacGuard(deps, "attendance.read_self")).Get("/attendances/me", deps.Handlers.AttendanceMe)
+			}
+			if deps.Handlers.AttendanceMeToday != nil {
+				r.With(rbacGuard(deps, "attendance.read_self")).Get("/attendances/me/today", deps.Handlers.AttendanceMeToday)
+			}
+			if deps.Handlers.AttendanceGetByID != nil {
+				r.With(rbacAnyGuard(deps, "attendance.read_self", "attendance.read_all")).Get("/attendances/{id}", deps.Handlers.AttendanceGetByID)
+			}
+			if deps.Handlers.AttendanceGetPhoto != nil {
+				r.With(rbacAnyGuard(deps, "attendance.read_self", "attendance.read_all")).Get("/attendances/{id}/photo", deps.Handlers.AttendanceGetPhoto)
+			}
+			if deps.Handlers.AttendanceList != nil {
+				r.With(rbacGuard(deps, "attendance.read_all")).Get("/attendances", deps.Handlers.AttendanceList)
+			}
+			if deps.Handlers.AttendancePending != nil {
+				r.With(rbacGuard(deps, "attendance.review")).Get("/attendances/pending", deps.Handlers.AttendancePending)
+			}
+			if deps.Handlers.AttendanceApprove != nil {
+				r.With(rbacGuard(deps, "attendance.review")).Post("/attendances/{id}/approve", deps.Handlers.AttendanceApprove)
+			}
+			if deps.Handlers.AttendanceReject != nil {
+				r.With(rbacGuard(deps, "attendance.review")).Post("/attendances/{id}/reject", deps.Handlers.AttendanceReject)
+			}
+			if deps.Handlers.AttendanceBulkReview != nil {
+				r.With(rbacGuard(deps, "attendance.review")).Post("/attendances/reviews", deps.Handlers.AttendanceBulkReview)
+			}
+			if deps.Handlers.AttendanceAttempts != nil {
+				r.With(rbacGuard(deps, "attendance.read_all")).Get("/attendances/attempts", deps.Handlers.AttendanceAttempts)
+			}
+
+			// Fase 4: Office Locations (#66 - #70)
+			if deps.Handlers.LocationList != nil {
+				r.With(rbacGuard(deps, "location.read")).Get("/locations", deps.Handlers.LocationList)
+			}
+			if deps.Handlers.LocationCreate != nil {
+				r.With(rbacGuard(deps, "location.create")).Post("/locations", deps.Handlers.LocationCreate)
+			}
+			if deps.Handlers.LocationGetByID != nil {
+				r.With(rbacGuard(deps, "location.read")).Get("/locations/{id}", deps.Handlers.LocationGetByID)
+			}
+			if deps.Handlers.LocationUpdate != nil {
+				r.With(rbacGuard(deps, "location.update")).Patch("/locations/{id}", deps.Handlers.LocationUpdate)
+			}
+			if deps.Handlers.LocationDelete != nil {
+				r.With(rbacGuard(deps, "location.delete")).Delete("/locations/{id}", deps.Handlers.LocationDelete)
 			}
 		})
 	})

@@ -392,13 +392,41 @@ func validateSettingValue(key, valType string, v any) error {
 			if num < 1 || num > 3650 {
 				return httpx.NewAppError(httpx.CodeValidationError, "face.retention_days_after_resign must be between 1 and 3650")
 			}
-		case "attendance.max_distance_meter":
+		case "attendance.max_distance_meter", "attendance_geofence_radius_meters":
 			if num < 10 || num > 10000 {
-				return httpx.NewAppError(httpx.CodeValidationError, "attendance.max_distance_meter must be between 10 and 10000")
+				return httpx.NewAppError(httpx.CodeValidationError, fmt.Sprintf("%s must be between 10 and 10000", key))
 			}
-		case "attendance.late_tolerance_minutes":
-			if num < 0 || num > 120 {
-				return httpx.NewAppError(httpx.CodeValidationError, "attendance.late_tolerance_minutes must be between 0 and 120")
+		case "attendance.late_tolerance_minutes", "attendance_late_tolerance_minutes":
+			if num < 0 || num > 240 {
+				return httpx.NewAppError(httpx.CodeValidationError, fmt.Sprintf("%s must be between 0 and 240", key))
+			}
+		case "attendance_early_leave_tolerance_minutes", "attendance_overtime_minimum_minutes", "attendance_checkout_min_interval_minutes":
+			if num < 0 || num > 240 {
+				return httpx.NewAppError(httpx.CodeValidationError, fmt.Sprintf("%s must be between 0 and 240", key))
+			}
+		case "attendance_photo_retention_days":
+			if num < 1 || num > 3650 {
+				return httpx.NewAppError(httpx.CodeValidationError, "attendance_photo_retention_days must be between 1 and 3650")
+			}
+		case "attendance_max_skew_seconds":
+			if num < 10 || num > 3600 {
+				return httpx.NewAppError(httpx.CodeValidationError, "attendance_max_skew_seconds must be between 10 and 3600")
+			}
+		case "attendance_fallback_max_per_month":
+			if num < 0 || num > 31 {
+				return httpx.NewAppError(httpx.CodeValidationError, "attendance_fallback_max_per_month must be between 0 and 31")
+			}
+		case "attendance_max_failed_attempts":
+			if num < 1 || num > 20 {
+				return httpx.NewAppError(httpx.CodeValidationError, "attendance_max_failed_attempts must be between 1 and 20")
+			}
+		case "attendance_failed_attempt_window_seconds":
+			if num < 10 || num > 3600 {
+				return httpx.NewAppError(httpx.CodeValidationError, "attendance_failed_attempt_window_seconds must be between 10 and 3600")
+			}
+		case "workday_cutoff_hour":
+			if num < 0 || num > 23 {
+				return httpx.NewAppError(httpx.CodeValidationError, "workday_cutoff_hour must be between 0 and 23")
 			}
 		case "security.max_failed_login":
 			if num < 3 || num > 10 {
@@ -428,9 +456,14 @@ func validateSettingValue(key, valType string, v any) error {
 		}
 
 		switch key {
-		case "attendance.work_start_time", "attendance.work_end_time":
+		case "attendance.work_start_time", "attendance.work_end_time",
+			"attendance_work_start_time", "attendance_work_end_time", "attendance_auto_checkout_time":
 			if _, err := time.Parse("15:04", str); err != nil {
 				return httpx.NewAppError(httpx.CodeValidationError, fmt.Sprintf("setting %q must be in HH:MM format", key))
+			}
+		case "company_timezone":
+			if _, err := time.LoadLocation(str); err != nil {
+				return httpx.NewAppError(httpx.CodeValidationError, fmt.Sprintf("setting %q must be a valid IANA timezone (e.g. Asia/Jakarta)", key))
 			}
 		case "face.liveness_strictness":
 			if str != "low" && str != "standard" && str != "high" {

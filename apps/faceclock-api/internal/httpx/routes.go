@@ -99,4 +99,26 @@ var RouteRegistry = map[string]RouteGuard{
 	"GET /api/v1/face/reindex-jobs":              "face.reindex",
 	"GET /api/v1/face/reindex-jobs/{id}":         "face.reindex",
 	"POST /api/v1/face/reindex-jobs/{id}/cancel": "face.reindex",
+
+	// #53 - #65: Attendance Engine (Fase 4)
+	"POST /api/v1/attendances/clock-in":     "attendance.checkin",
+	"POST /api/v1/attendances/clock-out":    "attendance.checkin",
+	"GET /api/v1/attendances/context":       "attendance.checkin",
+	"GET /api/v1/attendances/me":            "attendance.read_self",
+	"GET /api/v1/attendances/me/today":      "attendance.read_self",
+	"GET /api/v1/attendances/{id}":          "attendance.read_self|attendance.read_all",
+	"GET /api/v1/attendances/{id}/photo":    "attendance.read_self|attendance.read_all",
+	"GET /api/v1/attendances":               "attendance.read_all",
+	"GET /api/v1/attendances/pending":       "attendance.review",
+	"POST /api/v1/attendances/{id}/approve": "attendance.review",
+	"POST /api/v1/attendances/{id}/reject":  "attendance.review",
+	"POST /api/v1/attendances/reviews":      "attendance.review",
+	"GET /api/v1/attendances/attempts":      "attendance.read_all",
+
+	// #66 - #70: Office Locations (Fase 4)
+	"GET /api/v1/locations":         "location.read",
+	"POST /api/v1/locations":        "location.create",
+	"GET /api/v1/locations/{id}":    "location.read",
+	"PATCH /api/v1/locations/{id}":  "location.update",
+	"DELETE /api/v1/locations/{id}": "location.delete",
 }

@@ -26,4 +26,10 @@ func TestStorageKeys(t *testing.T) {
 	if got := StagingSessionPrefix(sessID); got != expectedPrefix {
 		t.Errorf("StagingSessionPrefix got %q, want %q", got, expectedPrefix)
 	}
+
+	attID := uuid.MustParse("55555555-5555-5555-5555-555555555555")
+	expectedAtt := "attendances/11111111-1111-1111-1111-111111111111/in/55555555-5555-5555-5555-555555555555.jpg"
+	if got := AttendancePhotoKey(empID, "in", attID); got != expectedAtt {
+		t.Errorf("AttendancePhotoKey got %q, want %q", got, expectedAtt)
+	}
 }

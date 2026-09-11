@@ -17,6 +17,7 @@ import (
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/employee"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/face"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/rbac"
+	"github.com/faceclock/faceclock/apps/faceclock-api/internal/settings"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/storage"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -57,7 +58,8 @@ func TestAttendanceFlow(t *testing.T) {
 	empSvc := employee.NewService(pool)
 	empSvc.SetFaceBiometrics(mockEngine, localStore)
 
-	attSvc := attendance.NewService(pool, mockEngine, localStore)
+	settingsSvc := settings.NewService(pool)
+	attSvc := attendance.NewService(pool, mockEngine, localStore, settingsSvc)
 	auditRec := audit.NewRecorder(pool)
 	attHandler := attendance.NewHandler(attSvc, auditRec)
 
@@ -72,6 +74,7 @@ func TestAttendanceFlow(t *testing.T) {
 	}
 
 	facePhotoA := []byte("employee-original-face-photo-bytes-xyz-1")
+	facePhotoA2 := []byte("employee-evening-face-photo-bytes-xyz-3")
 	facePhotoB := []byte("different-person-face-photo-bytes-xyz-2")
 
 	principal := &rbac.Principal{
@@ -111,6 +114,8 @@ func TestAttendanceFlow(t *testing.T) {
 		w := multipart.NewWriter(&b)
 		fw, _ := w.CreateFormFile("photo", "face.jpg")
 		fw.Write(facePhotoB) // Different photo
+		w.WriteField("latitude", "-6.2088")
+		w.WriteField("longitude", "106.8456")
 		w.Close()
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/attendance/clock-in", &b)
@@ -130,6 +135,8 @@ func TestAttendanceFlow(t *testing.T) {
 		w := multipart.NewWriter(&b)
 		fw, _ := w.CreateFormFile("photo", "face.jpg")
 		fw.Write(facePhotoA) // Matching photo
+		w.WriteField("latitude", "-6.2088")
+		w.WriteField("longitude", "106.8456")
 		w.WriteField("notes", "Morning check-in on time")
 		w.Close()
 
@@ -146,10 +153,21 @@ func TestAttendanceFlow(t *testing.T) {
 	})
 
 	t.Run("clock-out succeeds with matching enrolled face", func(t *testing.T) {
+		// Enroll second face photo for employee so evening photo matches biometrics
+		_, err := empSvc.EnrollFace(ctx, emp.ID, facePhotoA2, "image/jpeg")
+		if err != nil {
+			t.Fatalf("failed to enroll evening face: %v", err)
+		}
+
+		// Backdate check-in record so minimum interval (>5 mins) check passes
+		_, _ = pool.Exec(ctx, "UPDATE attendances SET server_timestamp = NOW() - INTERVAL '10 minutes' WHERE employee_id = $1", emp.ID)
+
 		var b bytes.Buffer
 		w := multipart.NewWriter(&b)
 		fw, _ := w.CreateFormFile("photo", "face.jpg")
-		fw.Write(facePhotoA) // Matching photo
+		fw.Write(facePhotoA2) // Matching distinct photo (Anti-Replay safe)
+		w.WriteField("latitude", "-6.2088")
+		w.WriteField("longitude", "106.8456")
 		w.WriteField("notes", "Evening check-out")
 		w.Close()
 

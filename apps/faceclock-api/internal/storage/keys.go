@@ -23,3 +23,9 @@ func StagingPhotoKey(sessionID, photoID uuid.UUID) string {
 func StagingSessionPrefix(sessionID uuid.UUID) string {
 	return fmt.Sprintf("face-staging/%s/", sessionID)
 }
+
+// AttendancePhotoKey returns the storage key for an attendance check-in or check-out photo:
+// attendances/{employee_id}/{clock_type}/{attendance_id}.jpg
+func AttendancePhotoKey(employeeID uuid.UUID, clockType string, attendanceID uuid.UUID) string {
+	return fmt.Sprintf("attendances/%s/%s/%s.jpg", employeeID, clockType, attendanceID)
+}
