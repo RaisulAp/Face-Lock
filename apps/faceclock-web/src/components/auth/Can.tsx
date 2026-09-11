@@ -3,18 +3,18 @@ import { useAuth } from "../../lib/auth/useAuth";
 import type { PermissionCheck } from "../../lib/permissions";
 
 interface CanProps {
-    permission: PermissionCheck;
-    mode?: "all" | "any";
-    fallback?: React.ReactNode;
-    children: React.ReactNode;
+  permission: PermissionCheck;
+  mode?: "all" | "any";
+  fallback?: React.ReactNode;
+  children: React.ReactNode;
 }
 
 export function Can({ permission, mode = "all", fallback = null, children }: CanProps) {
-    const { can } = useAuth();
+  const { can } = useAuth();
 
-    if (!can(permission, mode)) {
-        return <>{fallback}</>;
-    }
+  if (!can(permission, mode)) {
+    return <>{fallback}</>;
+  }
 
-    return <>{children}</>;
+  return <>{children}</>;
 }

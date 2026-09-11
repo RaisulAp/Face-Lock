@@ -11,7 +11,7 @@ export function LocalTime({ value, mode = "datetime", format, className = "" }: 
     if (!value) return <span className="text-gray-400">-</span>;
 
     const actualMode = format || mode;
-    let formatted = "-";
+    let formatted: string;
     if (actualMode === "datetime") {
         formatted = formatDateTime(value);
     } else if (actualMode === "time") {

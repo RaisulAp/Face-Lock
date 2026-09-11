@@ -288,7 +288,7 @@ berikut **sudah disetujui** di dokumen sumbernya dan wajib dicatat di
 | **REV-INF-03** | **MinIO ditambahkan ke `docker-compose.yml`** + env `STORAGE_DRIVER=s3`, `STORAGE_S3_ENDPOINT/REGION/BUCKET_FACE/BUCKET_ATTENDANCE/ACCESS_KEY/SECRET_KEY/FORCE_PATH_STYLE/SSE`. Dua bucket terpisah karena masa retensinya berbeda | Fase 3 § 2.1 (D13) | [Fase 0 § 2.9](01-Fase0.md#29-database--docker-compose), `deploy/.env.example` | Wajib (bila D13 disetujui) | ✅ Selesai dieksekusi (Fase 3, driver Local & S3 MinIO di internal/storage) |
 | **REV-INF-04** | **`storage.Store.SignedURL()` tidak dipakai** di Fase 3/4/5/6 — konsekuensi D14 (foto dialirkan lewat API dengan cek permission per-request). Method tetap ada di interface untuk kemungkinan CDN di masa depan | Fase 3 § 2.2 (D14) | [Fase 0 § 2.6](01-Fase0.md#26-scaffolding-faceclock-api-go) interface `Store` | Catatan (bukan perubahan kode) | ✅ Selesai dieksekusi (Fase 3, streaming biner terproteksi di #44) |
 | **REV-INF-05** | **Dependensi `faceclock-web` bertambah**: `react-hook-form`, `zod`, `leaflet` (D22), `msw` + `@playwright/test` (dev) | Fase 5 § 12 no. 5 | [Fase 0 § 2.7](01-Fase0.md#27-scaffolding-faceclock-web-react) | Tambahan | ✅ Selesai dieksekusi (Fase 5, apps/faceclock-web) |
-| **REV-INF-06** | **Dependensi `faceclock-web` bertambah lagi**: `dompurify`, `ulid`; Playwright butuh flag kamera palsu di config | Fase 6 § 12 no. 6 | Fase 0 § 2.7 | Tambahan | ⬜ Belum dieksekusi |
+| **REV-INF-06** | **Dependensi `faceclock-web` bertambah lagi**: `dompurify`, `ulid`; Playwright butuh flag kamera palsu di config | Fase 6 § 12 no. 6 | Fase 0 § 2.7 | Tambahan | ✅ Selesai dieksekusi (Fase 6, apps/faceclock-web) |
 
 ### J. Artefak kontrak bersama (berkas kanonik)
 

@@ -1,5 +1,6 @@
-import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import { createBrowserRouter, Navigate, RouterProvider } from "react-router-dom";
 import { AppShell } from "./AppShell";
+import { EmployeeShell } from "./EmployeeShell";
 import { RequireAuth, RequirePermission } from "../lib/auth/RequireAuth";
 
 // Auth & Shell Pages
@@ -8,7 +9,14 @@ import { AccountPage } from "../features/auth/pages/AccountPage";
 import { SmartRedirect } from "../features/auth/pages/SmartRedirect";
 import { ForbiddenPage } from "../features/auth/pages/ForbiddenPage";
 import { NotFoundPage } from "../features/auth/pages/NotFoundPage";
-import { EmployeePlaceholderPage } from "../features/auth/pages/EmployeePlaceholderPage";
+
+// Employee Portal Pages (Fase 6)
+import { AttendancePage } from "../features/employee-portal/pages/AttendancePage";
+import { EnrollmentPage } from "../features/employee-portal/pages/EnrollmentPage";
+import { ConsentPage } from "../features/employee-portal/pages/ConsentPage";
+import { HistoryPage } from "../features/employee-portal/pages/HistoryPage";
+import { HistoryDetailPage } from "../features/employee-portal/pages/HistoryDetailPage";
+import { ProfilePage } from "../features/employee-portal/pages/ProfilePage";
 
 // Features Pages
 import { DashboardPage } from "../features/dashboard/pages/DashboardPage";
@@ -44,11 +52,49 @@ const router = createBrowserRouter([
   },
   {
     path: "/employee/self",
+    element: <Navigate to="/portal/attendance" replace />,
+  },
+  {
+    path: "/me/attendance",
+    element: <Navigate to="/portal/attendance" replace />,
+  },
+  {
+    path: "/portal",
     element: (
       <RequireAuth>
-        <EmployeePlaceholderPage />
+        <EmployeeShell />
       </RequireAuth>
     ),
+    children: [
+      {
+        index: true,
+        element: <Navigate to="/portal/attendance" replace />,
+      },
+      {
+        path: "attendance",
+        element: <AttendancePage />,
+      },
+      {
+        path: "enrollment",
+        element: <EnrollmentPage />,
+      },
+      {
+        path: "consent",
+        element: <ConsentPage />,
+      },
+      {
+        path: "history",
+        element: <HistoryPage />,
+      },
+      {
+        path: "history/:id",
+        element: <HistoryDetailPage />,
+      },
+      {
+        path: "profile",
+        element: <ProfilePage />,
+      },
+    ],
   },
   {
     element: (

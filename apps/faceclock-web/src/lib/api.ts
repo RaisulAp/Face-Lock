@@ -43,27 +43,32 @@ async function executeFetch(path: string, options: RequestOptions = {}): Promise
   const token = tokenStore.getAccessToken();
 
   const isMutating = ["POST", "PUT", "PATCH", "DELETE"].includes(method.toUpperCase());
+  const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
 
   const fullUrl = path.startsWith("http") ? path : `${env.apiBaseUrl}${path}`;
+
+  const defaultHeaders: Record<string, string> = {
+    ...(isMutating ? { "X-Requested-With": "XMLHttpRequest" } : {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+
+  if (!isFormData) {
+    defaultHeaders["Content-Type"] = "application/json";
+  }
 
   return fetch(fullUrl, {
     ...rest,
     method,
     credentials: "include",
     headers: {
-      "Content-Type": "application/json",
-      ...(isMutating ? { "X-Requested-With": "XMLHttpRequest" } : {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...defaultHeaders,
       ...headers,
     },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body: isFormData ? (body as BodyInit) : body !== undefined ? JSON.stringify(body) : undefined,
   });
 }
 
-async function requestRaw<T>(
-  path: string,
-  options: RequestOptions = {},
-): Promise<SuccessEnvelope<T>> {
+async function requestRaw<T>(path: string, options: RequestOptions = {}): Promise<SuccessEnvelope<T>> {
   let response = await executeFetch(path, options);
 
   // If 401 and refresh is possible (and not an auth endpoint), retry once with fresh token
@@ -121,12 +126,13 @@ export const api = {
     requestRaw<T>(path, { ...options, method: "GET" }),
   post: <T>(path: string, body?: unknown, options?: RequestOptions) =>
     request<T>(path, { ...options, method: "POST", body }),
+  postForm: <T>(path: string, formData: FormData, options?: RequestOptions) =>
+    request<T>(path, { ...options, method: "POST", body: formData }),
   patch: <T>(path: string, body?: unknown, options?: RequestOptions) =>
     request<T>(path, { ...options, method: "PATCH", body }),
   put: <T>(path: string, body?: unknown, options?: RequestOptions) =>
     request<T>(path, { ...options, method: "PUT", body }),
-  delete: <T>(path: string, options?: RequestOptions) =>
-    request<T>(path, { ...options, method: "DELETE" }),
+  delete: <T>(path: string, options?: RequestOptions) => request<T>(path, { ...options, method: "DELETE" }),
 
   // For binary downloads like CSV export
   getBlob: async (path: string): Promise<{ blob: Blob; filename?: string }> => {
@@ -178,4 +184,3 @@ export const api = {
     return { blob, filename };
   },
 };
-

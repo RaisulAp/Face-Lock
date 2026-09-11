@@ -20,8 +20,8 @@ export function SmartRedirect() {
         return <Navigate to="/dashboard" replace />;
     }
 
-    if (can("attendance.checkin")) {
-        return <Navigate to="/me/attendance" replace />;
+    if (can("attendance.checkin") || can("attendance.read_self") || can("face.enroll_self")) {
+        return <Navigate to="/portal/attendance" replace />;
     }
 
     // User without operational permissions lands on /account to manage password

@@ -3,15 +3,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-do
 import { useAuth } from "../lib/auth/useAuth";
 import { NAVIGATION_CONFIG } from "./routes.config";
 import { env } from "../lib/env";
-import {
-    Menu,
-    X,
-    LogOut,
-    User,
-    KeyRound,
-    Shield,
-    ChevronDown,
-} from "lucide-react";
+import { Menu, X, LogOut, User, KeyRound, Shield, ChevronDown, Clock } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import type { SuccessEnvelope } from "../types/api";
@@ -27,8 +19,7 @@ export function AppShell() {
     const hasApprovePermission = can("attendance.approve");
     const { data: pendingData } = useQuery({
         queryKey: ["attendances", "pendingCount"],
-        queryFn: () =>
-            api.getWithMeta<unknown[]>("/api/v1/attendances/pending?per_page=1"),
+        queryFn: () => api.getWithMeta<unknown[]>("/api/v1/attendances/pending?per_page=1"),
         enabled: hasApprovePermission,
         refetchInterval: 30_000,
     });
@@ -64,9 +55,7 @@ export function AppShell() {
                             FC
                         </div>
                         <div>
-                            <span className="font-bold text-white text-sm tracking-tight block">
-                                FaceClock
-                            </span>
+                            <span className="font-bold text-white text-sm tracking-tight block">FaceClock</span>
                             <span className="text-[10px] text-slate-400 font-medium tracking-wide uppercase block -mt-1">
                                 Admin Panel
                             </span>
@@ -101,8 +90,7 @@ export function AppShell() {
                                             item.path !== "/dashboard" &&
                                             location.pathname.startsWith(item.path));
 
-                                    const showBadge =
-                                        item.badgeKey === "pendingCount" && pendingCount > 0;
+                                    const showBadge = item.badgeKey === "pendingCount" && pendingCount > 0;
 
                                     return (
                                         <NavLink
@@ -115,10 +103,7 @@ export function AppShell() {
                                                 }`}
                                         >
                                             <div className="flex items-center gap-2.5">
-                                                <Icon
-                                                    className={`w-4 h-4 ${isActive ? "text-white" : "text-slate-400"
-                                                        }`}
-                                                />
+                                                <Icon className={`w-4 h-4 ${isActive ? "text-white" : "text-slate-400"}`} />
                                                 <span>{item.label}</span>
                                             </div>
                                             {showBadge && (
@@ -141,9 +126,7 @@ export function AppShell() {
                             <User className="w-4 h-4" />
                         </div>
                         <div className="flex-1 min-w-0">
-                            <p className="text-xs font-semibold text-white truncate">
-                                {user?.full_name || user?.email}
-                            </p>
+                            <p className="text-xs font-semibold text-white truncate">{user?.full_name || user?.email}</p>
                             <div className="flex items-center gap-1 flex-wrap mt-0.5">
                                 {user?.roles?.map((r) => (
                                     <span
@@ -171,9 +154,7 @@ export function AppShell() {
                         >
                             <Menu className="w-5 h-5" />
                         </button>
-                        <span className="text-xs font-semibold text-gray-500 hidden sm:inline">
-                            FaceClock System
-                        </span>
+                        <span className="text-xs font-semibold text-gray-500 hidden sm:inline">FaceClock System</span>
                     </div>
 
                     <div className="flex items-center gap-4">
@@ -203,10 +184,7 @@ export function AppShell() {
 
                             {userDropdownOpen && (
                                 <>
-                                    <div
-                                        className="fixed inset-0 z-40"
-                                        onClick={() => setUserDropdownOpen(false)}
-                                    />
+                                    <div className="fixed inset-0 z-40" onClick={() => setUserDropdownOpen(false)} />
                                     <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-100 py-1.5 z-50 text-xs text-gray-700">
                                         <div className="px-3.5 py-2 border-b border-gray-100">
                                             <p className="font-semibold text-gray-900 truncate">
@@ -222,6 +200,15 @@ export function AppShell() {
                                         >
                                             <KeyRound className="w-3.5 h-3.5 text-gray-400" />
                                             <span>Ganti Password & Sesi</span>
+                                        </Link>
+
+                                        <Link
+                                            to="/portal/attendance"
+                                            onClick={() => setUserDropdownOpen(false)}
+                                            className="flex items-center gap-2 px-3.5 py-2 hover:bg-indigo-50 text-indigo-700 font-medium"
+                                        >
+                                            <Clock className="w-3.5 h-3.5 text-indigo-600" />
+                                            <span>Portal Absensi Karyawan</span>
                                         </Link>
 
                                         {can("audit.read") && (
