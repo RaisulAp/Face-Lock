@@ -58,10 +58,29 @@ type BatchEmbedResult struct {
 	TookMs       int              `json:"took_ms"`
 }
 
+type QualityThresholds struct {
+	MinDetScore   float64 `json:"min_det_score"`
+	MinBlurVar    float64 `json:"min_blur_var"`
+	MinBrightness float64 `json:"min_brightness"`
+	MaxBrightness float64 `json:"max_brightness"`
+	MinFaceRatio  float64 `json:"min_face_ratio"`
+	MaxAbsYaw     float64 `json:"max_abs_yaw"`
+	MaxAbsPitch   float64 `json:"max_abs_pitch"`
+}
+
+type ReadyData struct {
+	Status            string            `json:"status"`
+	ModelName         string            `json:"model_name"`
+	ModelVersion      string            `json:"model_version"`
+	EmbeddingDim      int               `json:"embedding_dim"`
+	QualityThresholds QualityThresholds `json:"quality_thresholds"`
+}
+
 type FaceEngine interface {
 	DetectAndEmbed(ctx context.Context, imageBytes []byte) (*EmbedResult, error)
 	EmbedBatch(ctx context.Context, images [][]byte) (*BatchEmbedResult, error)
 	Health(ctx context.Context) (*HealthStatus, error)
+	Ready(ctx context.Context) (*ReadyData, error)
 }
 
 // Client talks to faceclock-inference over the internal compose network.
@@ -105,6 +124,34 @@ func (c *Client) Health(ctx context.Context) (*HealthStatus, error) {
 		return nil, fmt.Errorf("inference: decode response: %w", err)
 	}
 	return &status, nil
+}
+
+func (c *Client) Ready(ctx context.Context) (*ReadyData, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/ready", nil)
+	if err != nil {
+		return nil, fmt.Errorf("inference: build ready request: %w", err)
+	}
+	if c.token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.token)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("inference: ready request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("inference: unexpected ready status %d", resp.StatusCode)
+	}
+
+	var envelope struct {
+		Data ReadyData `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&envelope); err != nil {
+		return nil, fmt.Errorf("inference: decode ready response: %w", err)
+	}
+	return &envelope.Data, nil
 }
 
 func (c *Client) DetectAndEmbed(ctx context.Context, imageBytes []byte) (*EmbedResult, error) {
@@ -212,6 +259,7 @@ type FakeClient struct {
 	CustomEmbedFn func(ctx context.Context, imageBytes []byte) (*EmbedResult, error)
 	CustomBatchFn func(ctx context.Context, images [][]byte) (*BatchEmbedResult, error)
 	HealthFn      func(ctx context.Context) (*HealthStatus, error)
+	ReadyFn       func(ctx context.Context) (*ReadyData, error)
 }
 
 func NewFakeClient() *FakeClient {
@@ -235,6 +283,27 @@ func (f *FakeClient) Health(ctx context.Context) (*HealthStatus, error) {
 		return f.HealthFn(ctx)
 	}
 	return &HealthStatus{Status: "ok", ModelVersion: "buffalo_l", Stub: false}, nil
+}
+
+func (f *FakeClient) Ready(ctx context.Context) (*ReadyData, error) {
+	if f.ReadyFn != nil {
+		return f.ReadyFn(ctx)
+	}
+	return &ReadyData{
+		Status:       "ok",
+		ModelName:    "buffalo_l",
+		ModelVersion: "buffalo_l@v1",
+		EmbeddingDim: 512,
+		QualityThresholds: QualityThresholds{
+			MinDetScore:   0.60,
+			MinBlurVar:    40.0,
+			MinBrightness: 55.0,
+			MaxBrightness: 215.0,
+			MinFaceRatio:  0.18,
+			MaxAbsYaw:     0.35,
+			MaxAbsPitch:   0.30,
+		},
+	}, nil
 }
 
 func (f *FakeClient) DetectAndEmbed(ctx context.Context, imageBytes []byte) (*EmbedResult, error) {

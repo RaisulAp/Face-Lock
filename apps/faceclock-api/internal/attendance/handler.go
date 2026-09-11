@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"math"
 	"net/http"
@@ -344,6 +345,123 @@ func (h *Handler) GetPendingRecords(w http.ResponseWriter, r *http.Request) {
 		Total:      total,
 		TotalPages: totalPages,
 	})
+}
+
+// GetSummary handles GET /api/v1/attendances/summary (#71)
+func (h *Handler) GetSummary(w http.ResponseWriter, r *http.Request) {
+	page, perPage := parsePagination(r)
+	filter := AttendanceSummaryFilter{
+		Page:       page,
+		PerPage:    perPage,
+		Department: r.URL.Query().Get("department"),
+		StartDate:  r.URL.Query().Get("start_date"),
+		EndDate:    r.URL.Query().Get("end_date"),
+	}
+	if empStr := r.URL.Query().Get("employee_id"); empStr != "" {
+		if empID, err := uuid.Parse(empStr); err == nil {
+			filter.EmployeeID = &empID
+		}
+	}
+
+	summary, err := h.svc.GetSummary(r.Context(), filter)
+	if err != nil {
+		if appErr, ok := err.(*httpx.AppError); ok {
+			httpx.Fail(r.Context(), w, appErr)
+			return
+		}
+		httpx.Fail(r.Context(), w, httpx.NewAppError(httpx.CodeInternalError, err.Error()))
+		return
+	}
+
+	totalPages := int(math.Ceil(float64(summary.Meta.TotalEmployees) / float64(perPage)))
+	httpx.Paginated(w, summary.Data, httpx.Meta{
+		Page:       page,
+		PerPage:    perPage,
+		Total:      summary.Meta.TotalEmployees,
+		TotalPages: totalPages,
+	})
+}
+
+// Export handles GET /api/v1/attendances/export (#72)
+func (h *Handler) Export(w http.ResponseWriter, r *http.Request) {
+	filter := ExportFilter{
+		Format: r.URL.Query().Get("format"),
+		Scope:  r.URL.Query().Get("scope"),
+		AttendanceFilter: AttendanceFilter{
+			Department:   r.URL.Query().Get("department"),
+			StartDate:    r.URL.Query().Get("start_date"),
+			EndDate:      r.URL.Query().Get("end_date"),
+			WorkDate:     r.URL.Query().Get("work_date"),
+			Status:       r.URL.Query().Get("status"),
+			Type:         r.URL.Query().Get("type"),
+			Method:       r.URL.Query().Get("method"),
+			IsPending:    r.URL.Query().Get("is_pending") == "true",
+			OnlyFallback: r.URL.Query().Get("only_fallback") == "true",
+			Search:       r.URL.Query().Get("search"),
+		},
+	}
+	if empStr := r.URL.Query().Get("employee_id"); empStr != "" {
+		if empID, err := uuid.Parse(empStr); err == nil {
+			filter.EmployeeID = &empID
+		}
+	}
+	if filter.Format == "" {
+		filter.Format = "csv"
+	}
+	if filter.Scope == "" {
+		filter.Scope = "detail"
+	}
+
+	// 1. Validate max rows before streaming headers
+	_, err := h.svc.ValidateExport(r.Context(), filter)
+	if err != nil {
+		if appErr, ok := err.(*httpx.AppError); ok {
+			httpx.Fail(r.Context(), w, appErr)
+			return
+		}
+		httpx.Fail(r.Context(), w, httpx.NewAppError(httpx.CodeInternalError, err.Error()))
+		return
+	}
+
+	// 2. Set headers
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	fromStr := filter.StartDate
+	if fromStr == "" {
+		fromStr = "all"
+	}
+	toStr := filter.EndDate
+	if toStr == "" {
+		toStr = time.Now().Format("2006-01-02")
+	}
+	filename := fmt.Sprintf("faceclock-absensi-%s_%s.csv", fromStr, toStr)
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+
+	// 3. Stream CSV
+	var flusher http.Flusher
+	if f, ok := w.(http.Flusher); ok {
+		flusher = f
+	}
+	rowCount, err := h.svc.ExportCSV(r.Context(), w, flusher, filter)
+	if err != nil {
+		return
+	}
+
+	// 4. Record audit log attendance.exported
+	if h.audit != nil {
+		filterMap := map[string]any{
+			"department": filter.Department,
+			"status":     filter.Status,
+			"type":       filter.Type,
+			"method":     filter.Method,
+			"scope":      filter.Scope,
+		}
+		_ = h.audit.RecordFromRequest(r, "attendance.exported", "attendance", nil, map[string]any{
+			"from":      filter.StartDate,
+			"to":        filter.EndDate,
+			"filters":   filterMap,
+			"row_count": rowCount,
+		})
+	}
 }
 
 // ApproveRecord handles POST /api/v1/attendances/{id}/approve (#62)

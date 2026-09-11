@@ -58,10 +58,11 @@ var RouteRegistry = map[string]RouteGuard{
 	"PUT /api/v1/roles/{id}/permissions": "role.assign_permission",
 	"GET /api/v1/permissions":            "permission.read",
 
-	// #28 - #30: Settings Endpoints
-	"GET /api/v1/settings":       "settings.read",
-	"GET /api/v1/settings/{key}": "settings.read",
-	"PUT /api/v1/settings/{key}": "settings.update",
+	// #28 - #30, #73: Settings Endpoints
+	"GET /api/v1/settings/face-quality-status": "settings.read",
+	"GET /api/v1/settings":                     "settings.read",
+	"GET /api/v1/settings/{key}":               "settings.read",
+	"PUT /api/v1/settings/{key}":               "settings.update",
 
 	// #31: Audit Logs Endpoint
 	"GET /api/v1/audit-logs": "audit.read",
@@ -100,12 +101,14 @@ var RouteRegistry = map[string]RouteGuard{
 	"GET /api/v1/face/reindex-jobs/{id}":         "face.reindex",
 	"POST /api/v1/face/reindex-jobs/{id}/cancel": "face.reindex",
 
-	// #53 - #65: Attendance Engine (Fase 4)
+	// #53 - #65, #71 - #72: Attendance Engine (Fase 4 - 5)
 	"POST /api/v1/attendances/clock-in":     "attendance.checkin",
 	"POST /api/v1/attendances/clock-out":    "attendance.checkin",
 	"GET /api/v1/attendances/context":       "attendance.checkin",
 	"GET /api/v1/attendances/me":            "attendance.read_self",
 	"GET /api/v1/attendances/me/today":      "attendance.read_self",
+	"GET /api/v1/attendances/summary":       "attendance.read_all",
+	"GET /api/v1/attendances/export":        "attendance.export",
 	"GET /api/v1/attendances/{id}":          "attendance.read_self|attendance.read_all",
 	"GET /api/v1/attendances/{id}/photo":    "attendance.read_self|attendance.read_all",
 	"GET /api/v1/attendances":               "attendance.read_all",

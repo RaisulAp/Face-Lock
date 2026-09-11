@@ -199,6 +199,13 @@ func (m *mockEngine) Health(ctx context.Context) (*inference.HealthStatus, error
 	}, nil
 }
 
+func (m *mockEngine) Ready(ctx context.Context) (*inference.ReadyData, error) {
+	return &inference.ReadyData{
+		Status:       m.status,
+		ModelVersion: m.modelVersion,
+	}, nil
+}
+
 type mockStore struct {
 	files map[string][]byte
 }

@@ -3,13 +3,17 @@ package attendance
 import (
 	"bytes"
 	"context"
+	"encoding/csv"
 	"errors"
 	"fmt"
 	"io"
 	"math"
+	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/faceclock/faceclock/apps/faceclock-api/internal/audit"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/face"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/geo"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/httpx"
@@ -27,20 +31,27 @@ var ErrPhotoPurged = errors.New("photo purged")
 
 // Service orchestrates the complete Attendance Engine workflow.
 type Service struct {
-	db         *pgxpool.Pool
-	faceEngine face.FaceEngine
-	store      storage.Store
-	settings   *settings.Service
+	db            *pgxpool.Pool
+	faceEngine    face.FaceEngine
+	store         storage.Store
+	settings      *settings.Service
+	auditRecorder *audit.Recorder
 }
 
 // NewService constructs a new attendance Service.
 func NewService(db *pgxpool.Pool, engine face.FaceEngine, store storage.Store, setSvc *settings.Service) *Service {
 	return &Service{
-		db:         db,
-		faceEngine: engine,
-		store:      store,
-		settings:   setSvc,
+		db:            db,
+		faceEngine:    engine,
+		store:         store,
+		settings:      setSvc,
+		auditRecorder: audit.NewRecorder(db),
 	}
+}
+
+// SetAuditRecorder sets the audit recorder.
+func (s *Service) SetAuditRecorder(rec *audit.Recorder) {
+	s.auditRecorder = rec
 }
 
 // SetDependencies allows updating dependencies for testing or dynamic wiring.
@@ -1258,17 +1269,7 @@ func (s *Service) getAttendanceByID(ctx context.Context, id uuid.UUID) (*Attenda
 	return att, nil
 }
 
-func (s *Service) queryAttendanceRecords(ctx context.Context, filter AttendanceFilter) ([]Attendance, int, error) {
-	page := filter.Page
-	if page < 1 {
-		page = 1
-	}
-	perPage := filter.PerPage
-	if perPage < 1 || perPage > 100 {
-		perPage = 20
-	}
-	offset := (page - 1) * perPage
-
+func (s *Service) buildAttendanceWhereClause(filter AttendanceFilter) (string, []any) {
 	var where []string
 	var args []any
 	idx := 1
@@ -1329,6 +1330,21 @@ func (s *Service) queryAttendanceRecords(ctx context.Context, filter AttendanceF
 	if len(where) > 0 {
 		whereClause = "WHERE " + strings.Join(where, " AND ")
 	}
+	return whereClause, args
+}
+
+func (s *Service) queryAttendanceRecords(ctx context.Context, filter AttendanceFilter) ([]Attendance, int, error) {
+	page := filter.Page
+	if page < 1 {
+		page = 1
+	}
+	perPage := filter.PerPage
+	if perPage < 1 || perPage > 100 {
+		perPage = 20
+	}
+	offset := (page - 1) * perPage
+
+	whereClause, args := s.buildAttendanceWhereClause(filter)
 
 	countQ := fmt.Sprintf(`
 		SELECT count(*)
@@ -1346,6 +1362,7 @@ func (s *Service) queryAttendanceRecords(ctx context.Context, filter AttendanceF
 		orderClause = "ORDER BY a.server_timestamp ASC"
 	}
 
+	argIdx := len(args) + 1
 	queryQ := fmt.Sprintf(`
 		SELECT a.id, a.employee_id, a.work_date, a.type, a.status, a.method,
 		       a.server_timestamp, a.client_reported_at, a.clock_skew_seconds,
@@ -1364,7 +1381,7 @@ func (s *Service) queryAttendanceRecords(ctx context.Context, filter AttendanceF
 		%s
 		%s
 		LIMIT $%d OFFSET $%d
-	`, whereClause, orderClause, idx, idx+1)
+	`, whereClause, orderClause, argIdx, argIdx+1)
 	args = append(args, perPage, offset)
 
 	rows, err := s.db.Query(ctx, queryQ, args...)
@@ -1601,4 +1618,537 @@ func (s *Service) scanAttendanceRow(row pgx.Row) (*Attendance, error) {
 	att.Method = AttendanceMethod(method)
 
 	return &att, nil
+}
+
+// GetSummary returns aggregated attendance statistics for employees over a given date range.
+func (s *Service) GetSummary(ctx context.Context, filter AttendanceSummaryFilter) (*AttendanceSummaryResponse, error) {
+	if filter.Page < 1 {
+		filter.Page = 1
+	}
+	if filter.PerPage < 1 || filter.PerPage > 100 {
+		filter.PerPage = 20
+	}
+	offset := (filter.Page - 1) * filter.PerPage
+
+	tzName := "Asia/Jakarta"
+	workStartTime := "08:00"
+	workEndTime := "17:00"
+	lateTolerance := 15
+	if s.settings != nil {
+		tzName = s.settings.GetString(ctx, "attendance_timezone", "Asia/Jakarta")
+		workStartTime = s.settings.GetString(ctx, "attendance_work_start_time", "08:00")
+		workEndTime = s.settings.GetString(ctx, "attendance_work_end_time", "17:00")
+		lateTolerance = s.settings.GetInt(ctx, "attendance_late_tolerance_minutes", 15)
+	}
+	loc, err := time.LoadLocation(tzName)
+	if err != nil {
+		loc = time.FixedZone("WIB", 7*3600)
+	}
+
+	now := time.Now().In(loc)
+	startDateStr := filter.StartDate
+	if startDateStr == "" {
+		startDateStr = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, loc).Format("2006-01-02")
+	}
+	endDateStr := filter.EndDate
+	if endDateStr == "" {
+		endDateStr = now.Format("2006-01-02")
+	}
+
+	startDate, err := time.ParseInLocation("2006-01-02", startDateStr, loc)
+	if err != nil {
+		return nil, httpx.NewAppError(httpx.CodeValidationError, "invalid start_date format, must be YYYY-MM-DD")
+	}
+	endDate, err := time.ParseInLocation("2006-01-02", endDateStr, loc)
+	if err != nil {
+		return nil, httpx.NewAppError(httpx.CodeValidationError, "invalid end_date format, must be YYYY-MM-DD")
+	}
+	if endDate.Before(startDate) {
+		return nil, httpx.NewAppError(httpx.CodeValidationError, "end_date cannot be before start_date")
+	}
+
+	calcEnd := endDate
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
+	if calcEnd.After(today) {
+		calcEnd = today
+	}
+	workingDays := 0
+	if !calcEnd.Before(startDate) {
+		curr := startDate
+		for !curr.After(calcEnd) {
+			if curr.Weekday() != time.Saturday && curr.Weekday() != time.Sunday {
+				workingDays++
+			}
+			curr = curr.AddDate(0, 0, 1)
+		}
+	}
+
+	var empWhere []string
+	var empArgs []any
+	idx := 1
+
+	empWhere = append(empWhere, "e.is_active = true")
+	if filter.EmployeeID != nil {
+		empWhere = append(empWhere, fmt.Sprintf("e.id = $%d", idx))
+		empArgs = append(empArgs, *filter.EmployeeID)
+		idx++
+	}
+	if filter.Department != "" {
+		empWhere = append(empWhere, fmt.Sprintf("e.department = $%d", idx))
+		empArgs = append(empArgs, filter.Department)
+		idx++
+	}
+
+	empWhereStr := "WHERE " + strings.Join(empWhere, " AND ")
+
+	countQ := fmt.Sprintf(`SELECT count(*) FROM employees e %s`, empWhereStr)
+	var totalEmployees int
+	if err := s.db.QueryRow(ctx, countQ, empArgs...).Scan(&totalEmployees); err != nil {
+		return nil, fmt.Errorf("counting employees for summary: %w", err)
+	}
+
+	empQuery := fmt.Sprintf(`
+		SELECT e.id, e.full_name, e.employee_number, e.department
+		FROM employees e
+		%s
+		ORDER BY e.employee_number ASC
+		LIMIT $%d OFFSET $%d
+	`, empWhereStr, idx, idx+1)
+	empArgs = append(empArgs, filter.PerPage, offset)
+
+	rows, err := s.db.Query(ctx, empQuery, empArgs...)
+	if err != nil {
+		return nil, fmt.Errorf("querying employees for summary: %w", err)
+	}
+	defer rows.Close()
+
+	type empMeta struct {
+		id             uuid.UUID
+		fullName       string
+		employeeNumber string
+		department     string
+	}
+	var emps []empMeta
+	var empIDs []uuid.UUID
+	for rows.Next() {
+		var em empMeta
+		if err := rows.Scan(&em.id, &em.fullName, &em.employeeNumber, &em.department); err != nil {
+			return nil, fmt.Errorf("scanning employee for summary: %w", err)
+		}
+		emps = append(emps, em)
+		empIDs = append(empIDs, em.id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterating employees for summary: %w", err)
+	}
+
+	if len(emps) == 0 {
+		return &AttendanceSummaryResponse{
+			Data: []AttendanceSummaryItem{},
+			Meta: AttendanceSummaryMeta{
+				TotalEmployees: totalEmployees,
+				Page:           filter.Page,
+				PerPage:        filter.PerPage,
+				StartDate:      startDateStr,
+				EndDate:        endDateStr,
+			},
+		}, nil
+	}
+
+	attQ := `
+		SELECT a.employee_id, a.work_date, a.type, a.status, a.method, a.server_timestamp
+		FROM attendances a
+		WHERE a.employee_id = ANY($1) AND a.work_date >= $2::date AND a.work_date <= $3::date
+		ORDER BY a.server_timestamp ASC
+	`
+	attRows, err := s.db.Query(ctx, attQ, empIDs, startDateStr, endDateStr)
+	if err != nil {
+		return nil, fmt.Errorf("querying attendances for summary: %w", err)
+	}
+	defer attRows.Close()
+
+	type attMini struct {
+		workDate time.Time
+		attType  string
+		status   string
+		method   string
+		ts       time.Time
+	}
+	empAttMap := make(map[uuid.UUID][]attMini)
+	for attRows.Next() {
+		var empID uuid.UUID
+		var m attMini
+		if err := attRows.Scan(&empID, &m.workDate, &m.attType, &m.status, &m.method, &m.ts); err != nil {
+			return nil, fmt.Errorf("scanning attendance for summary: %w", err)
+		}
+		empAttMap[empID] = append(empAttMap[empID], m)
+	}
+	if err := attRows.Err(); err != nil {
+		return nil, fmt.Errorf("iterating attendances for summary: %w", err)
+	}
+
+	items := make([]AttendanceSummaryItem, 0, len(emps))
+	for _, em := range emps {
+		records := empAttMap[em.id]
+		workDatesPresent := make(map[string]bool)
+		lateDates := make(map[string]bool)
+		earlyLeaveDates := make(map[string]bool)
+		pendingCount := 0
+		faceVerifiedCount := 0
+		fallbackCount := 0
+
+		for _, r := range records {
+			dateKey := r.workDate.Format("2006-01-02")
+			if r.status == "approved" {
+				workDatesPresent[dateKey] = true
+			}
+			if r.status == "pending_review" {
+				pendingCount++
+			}
+			if r.method == "face_verified" {
+				faceVerifiedCount++
+			} else {
+				fallbackCount++
+			}
+
+			if r.attType == "clock_in" {
+				isLate, _ := EvaluateLate(r.ts, loc, workStartTime, lateTolerance)
+				if isLate {
+					lateDates[dateKey] = true
+				}
+			} else if r.attType == "clock_out" {
+				parts := strings.Split(workEndTime, ":")
+				if len(parts) == 2 {
+					eh, _ := strconv.Atoi(parts[0])
+					emMin, _ := strconv.Atoi(parts[1])
+					tLocal := r.ts.In(loc)
+					targetTime := time.Date(tLocal.Year(), tLocal.Month(), tLocal.Day(), eh, emMin, 0, 0, loc)
+					if tLocal.Before(targetTime) {
+						earlyLeaveDates[dateKey] = true
+					}
+				}
+			}
+		}
+
+		presentDays := len(workDatesPresent)
+		absenceDays := workingDays - presentDays
+		if absenceDays < 0 {
+			absenceDays = 0
+		}
+
+		var deptPtr *string
+		if em.department != "" {
+			deptCopy := em.department
+			deptPtr = &deptCopy
+		}
+
+		items = append(items, AttendanceSummaryItem{
+			Employee: SummaryEmployeeDTO{
+				ID:             em.id,
+				FullName:       em.fullName,
+				EmployeeNumber: em.employeeNumber,
+				Department:     deptPtr,
+			},
+			TotalDays:      workingDays,
+			PresentDays:    presentDays,
+			LateDays:       len(lateDates),
+			EarlyLeaveDays: len(earlyLeaveDates),
+			AbsenceDays:    absenceDays,
+			PendingReview:  pendingCount,
+			FaceVerified:   faceVerifiedCount,
+			FallbackCount:  fallbackCount,
+		})
+	}
+
+	return &AttendanceSummaryResponse{
+		Data: items,
+		Meta: AttendanceSummaryMeta{
+			TotalEmployees: totalEmployees,
+			Page:           filter.Page,
+			PerPage:        filter.PerPage,
+			StartDate:      startDateStr,
+			EndDate:        endDateStr,
+		},
+	}, nil
+}
+
+// ValidateExport validates if an export request does not exceed export_max_rows limit.
+func (s *Service) ValidateExport(ctx context.Context, filter ExportFilter) (int, error) {
+	maxRows := 100000
+	if s.settings != nil {
+		maxRows = s.settings.GetInt(ctx, "attendance.export_max_rows", 100000)
+	}
+
+	var total int
+	if filter.Scope == "summary" {
+		var where []string
+		var args []any
+		idx := 1
+		where = append(where, "e.is_active = true")
+		if filter.EmployeeID != nil {
+			where = append(where, fmt.Sprintf("e.id = $%d", idx))
+			args = append(args, *filter.EmployeeID)
+			idx++
+		}
+		if filter.Department != "" {
+			where = append(where, fmt.Sprintf("e.department = $%d", idx))
+			args = append(args, filter.Department)
+			idx++
+		}
+		q := fmt.Sprintf(`SELECT count(*) FROM employees e WHERE %s`, strings.Join(where, " AND "))
+		if err := s.db.QueryRow(ctx, q, args...).Scan(&total); err != nil {
+			return 0, fmt.Errorf("counting summary employees for export: %w", err)
+		}
+	} else {
+		whereClause, args := s.buildAttendanceWhereClause(filter.AttendanceFilter)
+		countQ := fmt.Sprintf(`
+			SELECT count(*)
+			FROM attendances a
+			JOIN employees e ON e.id = a.employee_id
+			%s
+		`, whereClause)
+		if err := s.db.QueryRow(ctx, countQ, args...).Scan(&total); err != nil {
+			return 0, fmt.Errorf("counting attendances for export: %w", err)
+		}
+	}
+
+	if total > maxRows {
+		return total, httpx.NewAppError(httpx.CodeValidationError,
+			fmt.Sprintf("Export row count (%d) exceeds limit of %d rows. Please narrow your date range or filters.", total, maxRows))
+	}
+	return total, nil
+}
+
+// ExportCSV streams CSV data to w using http.Flusher if available.
+func (s *Service) ExportCSV(ctx context.Context, w io.Writer, flusher http.Flusher, filter ExportFilter) (int, error) {
+	// Write UTF-8 BOM
+	if _, err := w.Write([]byte("\xEF\xBB\xBF")); err != nil {
+		return 0, fmt.Errorf("writing UTF-8 BOM: %w", err)
+	}
+
+	cw := csv.NewWriter(w)
+	defer cw.Flush()
+
+	tzName := "Asia/Jakarta"
+	if s.settings != nil {
+		tzName = s.settings.GetString(ctx, "attendance_timezone", "Asia/Jakarta")
+	}
+	loc, err := time.LoadLocation(tzName)
+	if err != nil {
+		loc = time.FixedZone("WIB", 7*3600)
+	}
+
+	rowCount := 0
+
+	if filter.Scope == "summary" {
+		header := []string{
+			"Employee Number", "Full Name", "Department",
+			"Total Days", "Present Days", "Late Days", "Early Leave Days", "Absence Days",
+			"Pending Review", "Face Verified", "Fallback Count",
+		}
+		if err := cw.Write(header); err != nil {
+			return 0, fmt.Errorf("writing csv header: %w", err)
+		}
+		cw.Flush()
+
+		sumFilter := AttendanceSummaryFilter{
+			StartDate:  filter.StartDate,
+			EndDate:    filter.EndDate,
+			Department: filter.Department,
+			EmployeeID: filter.EmployeeID,
+			Page:       1,
+			PerPage:    100,
+		}
+
+		for {
+			res, err := s.GetSummary(ctx, sumFilter)
+			if err != nil {
+				return rowCount, fmt.Errorf("fetching summary batch: %w", err)
+			}
+			if len(res.Data) == 0 {
+				break
+			}
+
+			for _, item := range res.Data {
+				deptStr := ""
+				if item.Employee.Department != nil {
+					deptStr = *item.Employee.Department
+				}
+				row := []string{
+					item.Employee.EmployeeNumber,
+					item.Employee.FullName,
+					deptStr,
+					strconv.Itoa(item.TotalDays),
+					strconv.Itoa(item.PresentDays),
+					strconv.Itoa(item.LateDays),
+					strconv.Itoa(item.EarlyLeaveDays),
+					strconv.Itoa(item.AbsenceDays),
+					strconv.Itoa(item.PendingReview),
+					strconv.Itoa(item.FaceVerified),
+					strconv.Itoa(item.FallbackCount),
+				}
+				if err := cw.Write(row); err != nil {
+					return rowCount, fmt.Errorf("writing csv row: %w", err)
+				}
+				rowCount++
+			}
+			cw.Flush()
+			if flusher != nil {
+				flusher.Flush()
+			}
+
+			if sumFilter.Page*sumFilter.PerPage >= res.Meta.TotalEmployees {
+				break
+			}
+			sumFilter.Page++
+		}
+	} else {
+		header := []string{
+			"work_date", "employee_number", "full_name", "department", "type",
+			"server_timestamp_local", "status", "method", "fallback_reason",
+			"geofence_status", "office_location", "distance_meter",
+			"matched_similarity", "threshold_used", "model_version",
+			"capture_source", "note", "reviewed_by", "reviewed_at", "review_note",
+		}
+		if err := cw.Write(header); err != nil {
+			return 0, fmt.Errorf("writing csv header: %w", err)
+		}
+		cw.Flush()
+
+		whereClause, args := s.buildAttendanceWhereClause(filter.AttendanceFilter)
+		queryQ := fmt.Sprintf(`
+			SELECT a.work_date, e.employee_number, e.full_name, e.department,
+			       a.type, a.server_timestamp, a.status, a.method,
+			       COALESCE(a.fallback_reason, ''),
+			       a.distance_meter, o.name as matched_office_name,
+			       a.matched_similarity, a.threshold_used, a.model_version,
+			       COALESCE(a.fallback_note, ''),
+			       a.reviewed_by, a.reviewed_at, COALESCE(a.review_notes, '')
+			FROM attendances a
+			JOIN employees e ON e.id = a.employee_id
+			LEFT JOIN office_locations o ON o.id = a.matched_office_id
+			%s
+			ORDER BY a.server_timestamp ASC
+		`, whereClause)
+
+		rows, err := s.db.Query(ctx, queryQ, args...)
+		if err != nil {
+			return 0, fmt.Errorf("querying attendances for export: %w", err)
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var workDate time.Time
+			var empNum, fullName, dept, attType string
+			var srvTs time.Time
+			var status, method, fallbackReason string
+			var distanceMeter *float64
+			var officeName *string
+			var matchedSim, threshUsed *float64
+			var modelVer *string
+			var fallbackNote string
+			var reviewedBy *uuid.UUID
+			var reviewedAt *time.Time
+			var reviewNote string
+
+			if err := rows.Scan(
+				&workDate, &empNum, &fullName, &dept,
+				&attType, &srvTs, &status, &method,
+				&fallbackReason,
+				&distanceMeter, &officeName,
+				&matchedSim, &threshUsed, &modelVer,
+				&fallbackNote,
+				&reviewedBy, &reviewedAt, &reviewNote,
+			); err != nil {
+				return rowCount, fmt.Errorf("scanning attendance export row: %w", err)
+			}
+
+			// Format columns
+			geofenceStatus := "not_checked"
+			if distanceMeter != nil {
+				if officeName != nil {
+					geofenceStatus = "inside"
+				} else {
+					geofenceStatus = "outside"
+				}
+			}
+			offLocationStr := ""
+			if officeName != nil {
+				offLocationStr = *officeName
+			}
+			distStr := ""
+			if distanceMeter != nil {
+				distStr = fmt.Sprintf("%.1f", *distanceMeter)
+			}
+			simStr := ""
+			if matchedSim != nil {
+				simStr = fmt.Sprintf("%.4f", *matchedSim)
+			}
+			threshStr := ""
+			if threshUsed != nil {
+				threshStr = fmt.Sprintf("%.4f", *threshUsed)
+			}
+			modelVerStr := ""
+			if modelVer != nil {
+				modelVerStr = *modelVer
+			}
+			revByStr := ""
+			if reviewedBy != nil {
+				revByStr = reviewedBy.String()
+			}
+			revAtStr := ""
+			if reviewedAt != nil {
+				revAtStr = reviewedAt.In(loc).Format("2006-01-02 15:04:05")
+			}
+
+			row := []string{
+				workDate.Format("2006-01-02"),
+				empNum,
+				fullName,
+				dept,
+				attType,
+				srvTs.In(loc).Format("2006-01-02 15:04:05"),
+				status,
+				method,
+				fallbackReason,
+				geofenceStatus,
+				offLocationStr,
+				distStr,
+				simStr,
+				threshStr,
+				modelVerStr,
+				"web_camera",
+				fallbackNote,
+				revByStr,
+				revAtStr,
+				reviewNote,
+			}
+
+			if err := cw.Write(row); err != nil {
+				return rowCount, fmt.Errorf("writing csv row: %w", err)
+			}
+			rowCount++
+
+			if rowCount%100 == 0 {
+				cw.Flush()
+				if flusher != nil {
+					flusher.Flush()
+				}
+			}
+		}
+
+		if err := rows.Err(); err != nil {
+			return rowCount, fmt.Errorf("iterating attendance export rows: %w", err)
+		}
+	}
+
+	cw.Flush()
+	if err := cw.Error(); err != nil {
+		return rowCount, fmt.Errorf("flushing csv writer: %w", err)
+	}
+	if flusher != nil {
+		flusher.Flush()
+	}
+
+	return rowCount, nil
 }

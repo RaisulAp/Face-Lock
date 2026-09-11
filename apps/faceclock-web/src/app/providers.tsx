@@ -1,18 +1,15 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-
-// One shared QueryClient for the whole app. Fase 5 § tightens retry/backoff
-// per-endpoint; the Fase 0 defaults just need to exist so later features
-// don't have to invent client construction from scratch.
-export const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: 1,
-      refetchOnWindowFocus: false,
-    },
-  },
-});
+import { QueryClientProvider } from "@tanstack/react-query";
+import { queryClient } from "../lib/query";
+import { AuthProvider } from "../lib/auth/AuthProvider";
+import { ToastProvider } from "../components/ui/Toast";
 
 export function AppProviders({ children }: { children: ReactNode }) {
-  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+  return (
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <ToastProvider>{children}</ToastProvider>
+      </AuthProvider>
+    </QueryClientProvider>
+  );
 }

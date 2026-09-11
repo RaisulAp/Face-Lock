@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/audit"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/httpx"
+	"github.com/faceclock/faceclock/apps/faceclock-api/internal/inference"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/rbac"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -444,6 +446,10 @@ func validateSettingValue(key, valType string, v any) error {
 			if num < 30 || num > 3650 {
 				return httpx.NewAppError(httpx.CodeValidationError, "storage.retention_days must be between 30 and 3650")
 			}
+		case "attendance.export_max_rows":
+			if num < 100 || num > 1000000 {
+				return httpx.NewAppError(httpx.CodeValidationError, "attendance.export_max_rows must be between 100 and 1000000")
+			}
 		}
 	case "boolean":
 		if _, ok := v.(bool); !ok {
@@ -474,15 +480,133 @@ func validateSettingValue(key, valType string, v any) error {
 	return nil
 }
 
-// Handler handles HTTP requests for settings.
-type Handler struct {
-	svc   *Service
-	audit *audit.Recorder
+// FaceQualityThresholdItem represents a single face quality threshold compared with active inference.
+type FaceQualityThresholdItem struct {
+	Key                  string   `json:"key"`
+	AppSettingsValue     float64  `json:"app_settings_value"`
+	InferenceActiveValue *float64 `json:"inference_active_value"`
+	InSync               *bool    `json:"in_sync"`
 }
 
-// NewHandler creates a settings handler.
-func NewHandler(svc *Service, audit *audit.Recorder) *Handler {
-	return &Handler{svc: svc, audit: audit}
+// FaceQualityStatusResponse represents the payload of GET /api/v1/settings/face-quality-status (#73).
+type FaceQualityStatusResponse struct {
+	CheckedAt  *time.Time                 `json:"checked_at"`
+	InSync     *bool                      `json:"in_sync"`
+	Thresholds []FaceQualityThresholdItem `json:"thresholds"`
+}
+
+// Handler handles HTTP requests for settings.
+type Handler struct {
+	svc       *Service
+	audit     *audit.Recorder
+	inference inference.FaceEngine
+}
+
+// NewHandler creates a settings handler with optional inference engine.
+func NewHandler(svc *Service, audit *audit.Recorder, inf ...inference.FaceEngine) *Handler {
+	h := &Handler{svc: svc, audit: audit}
+	if len(inf) > 0 && inf[0] != nil {
+		h.inference = inf[0]
+	}
+	return h
+}
+
+// SetInference configures the inference engine client for live drift checks.
+func (h *Handler) SetInference(inf inference.FaceEngine) {
+	h.inference = inf
+}
+
+// FaceQualityStatus handles GET /api/v1/settings/face-quality-status (#73 - REV-EP-11 / K-02).
+func (h *Handler) FaceQualityStatus(w http.ResponseWriter, r *http.Request) {
+	keys := []string{
+		"face.min_det_score",
+		"face.min_blur_var",
+		"face.min_brightness",
+		"face.max_brightness",
+		"face.min_face_ratio",
+		"face.max_abs_yaw",
+		"face.max_abs_pitch",
+	}
+
+	defaultValues := map[string]float64{
+		"face.min_det_score":  0.60,
+		"face.min_blur_var":   40.0,
+		"face.min_brightness": 55.0,
+		"face.max_brightness": 215.0,
+		"face.min_face_ratio": 0.18,
+		"face.max_abs_yaw":    0.35,
+		"face.max_abs_pitch":  0.30,
+	}
+
+	var (
+		checkedAt     *time.Time
+		overallInSync *bool
+		thresholds    []FaceQualityThresholdItem
+	)
+
+	// Live check with strict 2-second timeout budget
+	var readyData *inference.ReadyData
+	if h.inference != nil {
+		checkCtx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+		if rd, err := h.inference.Ready(checkCtx); err == nil && rd != nil {
+			readyData = rd
+		}
+	}
+
+	if readyData != nil {
+		now := time.Now().UTC()
+		checkedAt = &now
+		allSync := true
+
+		activeValues := map[string]float64{
+			"face.min_det_score":  readyData.QualityThresholds.MinDetScore,
+			"face.min_blur_var":   readyData.QualityThresholds.MinBlurVar,
+			"face.min_brightness": readyData.QualityThresholds.MinBrightness,
+			"face.max_brightness": readyData.QualityThresholds.MaxBrightness,
+			"face.min_face_ratio": readyData.QualityThresholds.MinFaceRatio,
+			"face.max_abs_yaw":    readyData.QualityThresholds.MaxAbsYaw,
+			"face.max_abs_pitch":  readyData.QualityThresholds.MaxAbsPitch,
+		}
+
+		for _, k := range keys {
+			appVal := h.svc.GetFloat(r.Context(), k, defaultValues[k])
+			infVal := activeValues[k]
+			inSync := math.Abs(appVal-infVal) < 0.0001
+			if !inSync {
+				allSync = false
+			}
+
+			valCopy := infVal
+			syncCopy := inSync
+			thresholds = append(thresholds, FaceQualityThresholdItem{
+				Key:                  k,
+				AppSettingsValue:     appVal,
+				InferenceActiveValue: &valCopy,
+				InSync:               &syncCopy,
+			})
+		}
+		overallInSync = &allSync
+	} else {
+		// Inference unreachable or timed out within 2s -> return 200 with null active values
+		checkedAt = nil
+		overallInSync = nil
+		for _, k := range keys {
+			appVal := h.svc.GetFloat(r.Context(), k, defaultValues[k])
+			thresholds = append(thresholds, FaceQualityThresholdItem{
+				Key:                  k,
+				AppSettingsValue:     appVal,
+				InferenceActiveValue: nil,
+				InSync:               nil,
+			})
+		}
+	}
+
+	httpx.OK(w, FaceQualityStatusResponse{
+		CheckedAt:  checkedAt,
+		InSync:     overallInSync,
+		Thresholds: thresholds,
+	})
 }
 
 // List handles GET /api/v1/settings

@@ -21,7 +21,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Employee represents an employee domain model according to Fase 1 § 3.1 & § 4.2.
+// Employee represents an employee domain model according to Fase 1 § 3.1 & § 4.2 and Fase 5 REV-EP-03.
 type Employee struct {
 	ID               uuid.UUID  `json:"id"`
 	EmployeeNumber   string     `json:"employee_number"`
@@ -33,6 +33,9 @@ type Employee struct {
 	JoinDate         *string    `json:"join_date"` // YYYY-MM-DD
 	EmploymentStatus string     `json:"employment_status"`
 	HasUserAccount   bool       `json:"has_user_account"`
+	AttendanceMode   string     `json:"attendance_mode"`
+	ConsentStatus    string     `json:"consent_status"`
+	EnrollmentStatus string     `json:"enrollment_status"`
 	DeletedAt        *time.Time `json:"deleted_at,omitempty"`
 	CreatedAt        time.Time  `json:"created_at"`
 	UpdatedAt        time.Time  `json:"updated_at"`
@@ -46,6 +49,9 @@ type Filter struct {
 	Department       string
 	EmploymentStatus string
 	HasUser          *bool
+	AttendanceMode   string
+	ConsentStatus    string
+	EnrollmentStatus string
 }
 
 // Service provides employee operations.
@@ -54,6 +60,22 @@ type Service struct {
 	faceEngine face.FaceEngine
 	store      storage.Store
 }
+
+const consentStatusExpr = `(CASE
+	WHEN (SELECT bc.status FROM biometric_consents bc WHERE bc.employee_id = e.id ORDER BY bc.created_at DESC LIMIT 1) = 'withdrawn' THEN 'withdrawn'
+	WHEN (SELECT bc.status FROM biometric_consents bc WHERE bc.employee_id = e.id ORDER BY bc.created_at DESC LIMIT 1) = 'granted' THEN
+		CASE
+			WHEN (SELECT bc.document_version FROM biometric_consents bc WHERE bc.employee_id = e.id ORDER BY bc.created_at DESC LIMIT 1) = COALESCE((SELECT cd.version FROM consent_documents cd WHERE cd.is_active = true LIMIT 1), '2026-09-v1') THEN 'granted'
+			ELSE 'outdated'
+		END
+	ELSE 'none'
+END)`
+
+const enrollmentStatusExpr = `(CASE
+	WHEN COALESCE((SELECT COUNT(*) FROM face_references fr WHERE fr.employee_id = e.id AND fr.is_active = true), 0) = 0 THEN 'none'
+	WHEN (SELECT COUNT(*) FROM face_references fr WHERE fr.employee_id = e.id AND fr.is_active = true) < 3 THEN 'incomplete'
+	ELSE 'complete'
+END)`
 
 // NewService creates a new employee service.
 func NewService(db *pgxpool.Pool) *Service {
@@ -98,6 +120,21 @@ func (s *Service) List(ctx context.Context, f Filter) ([]Employee, httpx.Meta, e
 			whereClauses = append(whereClauses, "NOT EXISTS (SELECT 1 FROM users u WHERE u.employee_id = e.id AND u.deleted_at IS NULL)")
 		}
 	}
+	if f.AttendanceMode != "" {
+		whereClauses = append(whereClauses, fmt.Sprintf("COALESCE(e.attendance_mode, 'face') = $%d", argIdx))
+		args = append(args, f.AttendanceMode)
+		argIdx++
+	}
+	if f.ConsentStatus != "" {
+		whereClauses = append(whereClauses, fmt.Sprintf("%s = $%d", consentStatusExpr, argIdx))
+		args = append(args, f.ConsentStatus)
+		argIdx++
+	}
+	if f.EnrollmentStatus != "" {
+		whereClauses = append(whereClauses, fmt.Sprintf("%s = $%d", enrollmentStatusExpr, argIdx))
+		args = append(args, f.EnrollmentStatus)
+		argIdx++
+	}
 
 	whereSQL := "WHERE " + strings.Join(whereClauses, " AND ")
 
@@ -125,6 +162,9 @@ func (s *Service) List(ctx context.Context, f Filter) ([]Employee, httpx.Meta, e
 			e.join_date::text,
 			e.employment_status,
 			EXISTS (SELECT 1 FROM users u WHERE u.employee_id = e.id AND u.deleted_at IS NULL) AS has_user_account,
+			COALESCE(e.attendance_mode, 'face') AS attendance_mode,
+			`+consentStatusExpr+` AS consent_status,
+			`+enrollmentStatusExpr+` AS enrollment_status,
 			e.created_at,
 			e.updated_at
 		FROM employees e
@@ -155,6 +195,9 @@ func (s *Service) List(ctx context.Context, f Filter) ([]Employee, httpx.Meta, e
 			&e.JoinDate,
 			&e.EmploymentStatus,
 			&e.HasUserAccount,
+			&e.AttendanceMode,
+			&e.ConsentStatus,
+			&e.EnrollmentStatus,
 			&e.CreatedAt,
 			&e.UpdatedAt,
 		); err != nil {
@@ -179,7 +222,7 @@ func (s *Service) List(ctx context.Context, f Filter) ([]Employee, httpx.Meta, e
 
 // GetByID finds an employee by ID.
 func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*Employee, error) {
-	const q = `
+	querySQL := fmt.Sprintf(`
 		SELECT
 			e.id,
 			e.employee_number,
@@ -191,13 +234,16 @@ func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*Employee, error) 
 			e.join_date::text,
 			e.employment_status,
 			EXISTS (SELECT 1 FROM users u WHERE u.employee_id = e.id AND u.deleted_at IS NULL) AS has_user_account,
+			COALESCE(e.attendance_mode, 'face') AS attendance_mode,
+			%s AS consent_status,
+			%s AS enrollment_status,
 			e.created_at,
 			e.updated_at
 		FROM employees e
 		WHERE e.id = $1 AND e.deleted_at IS NULL
-	`
+	`, consentStatusExpr, enrollmentStatusExpr)
 	var e Employee
-	err := s.db.QueryRow(ctx, q, id).Scan(
+	err := s.db.QueryRow(ctx, querySQL, id).Scan(
 		&e.ID,
 		&e.EmployeeNumber,
 		&e.FullName,
@@ -208,6 +254,9 @@ func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*Employee, error) 
 		&e.JoinDate,
 		&e.EmploymentStatus,
 		&e.HasUserAccount,
+		&e.AttendanceMode,
+		&e.ConsentStatus,
+		&e.EnrollmentStatus,
 		&e.CreatedAt,
 		&e.UpdatedAt,
 	)
@@ -230,6 +279,7 @@ type CreateParams struct {
 	Email            *string `json:"email" validate:"omitempty,email"`
 	JoinDate         *string `json:"join_date" validate:"omitempty,datetime=2006-01-02"`
 	EmploymentStatus string  `json:"employment_status" validate:"omitempty,oneof=active inactive resigned"`
+	AttendanceMode   *string `json:"attendance_mode" validate:"omitempty,oneof=face pin remote hybrid"`
 }
 
 // Create inserts a new employee.
@@ -238,18 +288,20 @@ func (s *Service) Create(ctx context.Context, p CreateParams) (*Employee, error)
 	if status == "" {
 		status = "active"
 	}
+	mode := "face"
+	if p.AttendanceMode != nil && *p.AttendanceMode != "" {
+		mode = *p.AttendanceMode
+	}
 
 	const q = `
 		INSERT INTO employees (
-			employee_number, full_name, department, position, phone, email, join_date, employment_status
+			employee_number, full_name, department, position, phone, email, join_date, employment_status, attendance_mode
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7::date, $8
+			$1, $2, $3, $4, $5, $6, $7::date, $8, $9
 		)
-		RETURNING
-			id, employee_number, full_name, department, position, phone, email, join_date::text, employment_status,
-			false AS has_user_account, created_at, updated_at
+		RETURNING id
 	`
-	var e Employee
+	var newID uuid.UUID
 	err := s.db.QueryRow(ctx, q,
 		strings.TrimSpace(p.EmployeeNumber),
 		strings.TrimSpace(p.FullName),
@@ -259,20 +311,8 @@ func (s *Service) Create(ctx context.Context, p CreateParams) (*Employee, error)
 		p.Email,
 		p.JoinDate,
 		status,
-	).Scan(
-		&e.ID,
-		&e.EmployeeNumber,
-		&e.FullName,
-		&e.Department,
-		&e.Position,
-		&e.Phone,
-		&e.Email,
-		&e.JoinDate,
-		&e.EmploymentStatus,
-		&e.HasUserAccount,
-		&e.CreatedAt,
-		&e.UpdatedAt,
-	)
+		mode,
+	).Scan(&newID)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
@@ -281,7 +321,7 @@ func (s *Service) Create(ctx context.Context, p CreateParams) (*Employee, error)
 		return nil, fmt.Errorf("inserting employee: %w", err)
 	}
 
-	return &e, nil
+	return s.GetByID(ctx, newID)
 }
 
 // UpdateParams input for updating an employee.
@@ -294,6 +334,7 @@ type UpdateParams struct {
 	Email            *string `json:"email" validate:"omitempty,email"`
 	JoinDate         *string `json:"join_date" validate:"omitempty,datetime=2006-01-02"`
 	EmploymentStatus *string `json:"employment_status" validate:"omitempty,oneof=active inactive resigned"`
+	AttendanceMode   *string `json:"attendance_mode" validate:"omitempty,oneof=face pin remote hybrid"`
 }
 
 // Update updates an existing employee.
@@ -335,32 +376,18 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, p UpdateParams) (*Em
 	if p.EmploymentStatus != nil && *p.EmploymentStatus != "" {
 		status = *p.EmploymentStatus
 	}
+	attendanceMode := existing.AttendanceMode
+	if p.AttendanceMode != nil && *p.AttendanceMode != "" {
+		attendanceMode = *p.AttendanceMode
+	}
 
 	const q = `
 		UPDATE employees
 		SET employee_number = $1, full_name = $2, department = $3, position = $4, phone = $5, email = $6, join_date = $7::date,
-		    employment_status = $8, updated_at = NOW()
-		WHERE id = $9 AND deleted_at IS NULL
-		RETURNING
-			id, employee_number, full_name, department, position, phone, email, join_date::text, employment_status,
-			EXISTS (SELECT 1 FROM users u WHERE u.employee_id = $9 AND u.deleted_at IS NULL) AS has_user_account,
-			created_at, updated_at
+		    employment_status = $8, attendance_mode = $9, updated_at = NOW()
+		WHERE id = $10 AND deleted_at IS NULL
 	`
-	var updated Employee
-	err = s.db.QueryRow(ctx, q, empNum, fullName, department, pos, phone, email, joinDate, status, id).Scan(
-		&updated.ID,
-		&updated.EmployeeNumber,
-		&updated.FullName,
-		&updated.Department,
-		&updated.Position,
-		&updated.Phone,
-		&updated.Email,
-		&updated.JoinDate,
-		&updated.EmploymentStatus,
-		&updated.HasUserAccount,
-		&updated.CreatedAt,
-		&updated.UpdatedAt,
-	)
+	res, err := s.db.Exec(ctx, q, empNum, fullName, department, pos, phone, email, joinDate, status, attendanceMode, id)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
@@ -368,8 +395,11 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, p UpdateParams) (*Em
 		}
 		return nil, fmt.Errorf("updating employee: %w", err)
 	}
+	if res.RowsAffected() == 0 {
+		return nil, httpx.NewAppError(httpx.CodeNotFound, "employee not found")
+	}
 
-	return &updated, nil
+	return s.GetByID(ctx, id)
 }
 
 // Delete soft-deletes an employee if they do not have an active user account.
@@ -439,6 +469,15 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	if pp, err := strconv.Atoi(q.Get("per_page")); err == nil && pp > 0 {
 		filter.PerPage = pp
+	}
+	if mode := q.Get("attendance_mode"); mode != "" {
+		filter.AttendanceMode = mode
+	}
+	if cs := q.Get("consent_status"); cs != "" {
+		filter.ConsentStatus = cs
+	}
+	if es := q.Get("enrollment_status"); es != "" {
+		filter.EnrollmentStatus = es
 	}
 
 	employees, meta, err := h.svc.List(r.Context(), filter)

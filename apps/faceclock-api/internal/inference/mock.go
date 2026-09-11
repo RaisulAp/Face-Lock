@@ -38,6 +38,8 @@ type MockFaceEngine struct {
 	DetectErr       error
 	EmbedErr        error
 	HealthErr       error
+	ReadyErr        error
+	CustomReadyData *ReadyData
 }
 
 // NewMockFaceEngine creates a MockFaceEngine with buffalo_l default 512-dim embedding.
@@ -137,5 +139,31 @@ func (m *MockFaceEngine) Health(ctx context.Context) (*HealthStatus, error) {
 	return &HealthStatus{
 		Status:       m.HealthStat,
 		ModelVersion: m.ModelVer,
+	}, nil
+}
+
+func (m *MockFaceEngine) Ready(ctx context.Context) (*ReadyData, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.ReadyErr != nil {
+		return nil, m.ReadyErr
+	}
+	if m.CustomReadyData != nil {
+		return m.CustomReadyData, nil
+	}
+	return &ReadyData{
+		Status:       "ok",
+		ModelName:    "buffalo_l",
+		ModelVersion: m.ModelVer,
+		EmbeddingDim: 512,
+		QualityThresholds: QualityThresholds{
+			MinDetScore:   0.60,
+			MinBlurVar:    40.0,
+			MinBrightness: 55.0,
+			MaxBrightness: 215.0,
+			MinFaceRatio:  0.18,
+			MaxAbsYaw:     0.35,
+			MaxAbsPitch:   0.30,
+		},
 	}, nil
 }

@@ -112,6 +112,11 @@ type Handlers struct {
 	LocationGetByID http.HandlerFunc
 	LocationUpdate  http.HandlerFunc
 	LocationDelete  http.HandlerFunc
+
+	// Fase 5: Admin Panel & Configuration (#71 - #73)
+	AttendanceSummary         http.HandlerFunc
+	AttendanceExport          http.HandlerFunc
+	SettingsFaceQualityStatus http.HandlerFunc
 }
 
 // RouterDeps is every dependency the router needs to wire the middleware
@@ -284,6 +289,9 @@ func mountAPIv1(r chi.Router, deps RouterDeps) {
 			}
 
 			// Settings
+			if deps.Handlers.SettingsFaceQualityStatus != nil {
+				r.With(rbacGuard(deps, "settings.read")).Get("/settings/face-quality-status", deps.Handlers.SettingsFaceQualityStatus)
+			}
 			if deps.Handlers.SettingsList != nil {
 				r.With(rbacGuard(deps, "settings.read")).Get("/settings", deps.Handlers.SettingsList)
 			}
@@ -396,6 +404,12 @@ func mountAPIv1(r chi.Router, deps RouterDeps) {
 			}
 			if deps.Handlers.AttendanceMeToday != nil {
 				r.With(rbacGuard(deps, "attendance.read_self")).Get("/attendances/me/today", deps.Handlers.AttendanceMeToday)
+			}
+			if deps.Handlers.AttendanceSummary != nil {
+				r.With(rbacGuard(deps, "attendance.read_all")).Get("/attendances/summary", deps.Handlers.AttendanceSummary)
+			}
+			if deps.Handlers.AttendanceExport != nil {
+				r.With(rbacGuard(deps, "attendance.export")).Get("/attendances/export", deps.Handlers.AttendanceExport)
 			}
 			if deps.Handlers.AttendanceGetByID != nil {
 				r.With(rbacAnyGuard(deps, "attendance.read_self", "attendance.read_all")).Get("/attendances/{id}", deps.Handlers.AttendanceGetByID)

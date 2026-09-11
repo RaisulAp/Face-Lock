@@ -229,3 +229,74 @@ type AttemptFilter struct {
 	StartDate  string
 	EndDate    string
 }
+
+// AttendanceSummaryFilter carries parameters for GET /attendances/summary (#71).
+type AttendanceSummaryFilter struct {
+	From       string
+	To         string
+	StartDate  string
+	EndDate    string
+	EmployeeID *uuid.UUID
+	Department string
+	Status     string
+	Page       int
+	PerPage    int
+}
+
+// SummaryEmployeeDTO represents employee profile info in attendance summary.
+type SummaryEmployeeDTO struct {
+	ID             uuid.UUID `json:"id"`
+	EmployeeNumber string    `json:"employee_number"`
+	FullName       string    `json:"full_name"`
+	Department     *string   `json:"department"`
+}
+
+// AttendanceSummaryItem represents per-employee aggregated metrics.
+type AttendanceSummaryItem struct {
+	Employee             SummaryEmployeeDTO `json:"employee"`
+	TotalDays            int                `json:"total_days"`
+	PresentDays          int                `json:"present_days"`
+	LateDays             int                `json:"late_days"`
+	EarlyLeaveDays       int                `json:"early_leave_days"`
+	AbsenceDays          int                `json:"absence_days"`
+	PendingReview        int                `json:"pending_review"`
+	FaceVerified         int                `json:"face_verified"`
+	FallbackCount        int                `json:"fallback_count"`
+	WorkDays             int                `json:"work_days,omitempty"`
+	CheckInCount         int                `json:"check_in_count,omitempty"`
+	CheckOutCount        int                `json:"check_out_count,omitempty"`
+	ApprovedCount        int                `json:"approved_count,omitempty"`
+	PendingReviewCount   int                `json:"pending_review_count,omitempty"`
+	RejectedCount        int                `json:"rejected_count,omitempty"`
+	MissingCheckOutCount int                `json:"missing_check_out_count,omitempty"`
+	TotalWorkMinutes     int                `json:"total_work_minutes,omitempty"`
+	AvgWorkMinutes       int                `json:"avg_work_minutes,omitempty"`
+}
+
+// AttendanceSummaryMeta represents metadata for attendance summary pagination.
+type AttendanceSummaryMeta struct {
+	Page           int    `json:"page"`
+	PerPage        int    `json:"per_page"`
+	Total          int    `json:"total"`
+	TotalPages     int    `json:"total_pages"`
+	TotalEmployees int    `json:"total_employees"`
+	From           string `json:"from"`
+	To             string `json:"to"`
+	StartDate      string `json:"start_date"`
+	EndDate        string `json:"end_date"`
+}
+
+// AttendanceSummaryResponse represents the response envelope for #71.
+type AttendanceSummaryResponse struct {
+	Data []AttendanceSummaryItem `json:"data"`
+	Meta AttendanceSummaryMeta   `json:"meta"`
+}
+
+// ExportFilter carries parameters for GET /attendances/export (#72).
+type ExportFilter struct {
+	AttendanceFilter
+	From   string
+	To     string
+	Format string
+	Scope  string
+}
