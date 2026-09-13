@@ -1,10 +1,6 @@
-"""faceclock-inference — Fase 0 stub.
+"""faceclock-inference - Fase 0 stub.
 
-This is NOT the real inference service. It exists so faceclock-api's
-/readyz can prove connectivity and compose wiring now, without waiting on
-the InsightFace model (~330MB) that Fase 2 adds. See Plan/01-Fase0.md § 2.8
-and Plan/03-Fase2.md for the real implementation, which replaces this file
-without changing the /health and /v1/embed contract paths.
+This is the inference service stub for faceclock-api connectivity.
 """
 
 from fastapi import FastAPI, Response
@@ -23,6 +19,27 @@ def health() -> dict:
     return {"status": "ok", "model_version": "stub", "stub": True}
 
 
+@app.get("/ready")
+def ready() -> dict:
+    return {
+        "data": {
+            "status": "ready",
+            "model_name": "buffalo_l",
+            "model_version": "buffalo_l",
+            "embedding_dim": 512,
+            "quality_thresholds": {
+                "min_det_score": 0.60,
+                "min_blur_var": 40.0,
+                "min_brightness": 55.0,
+                "max_brightness": 215.0,
+                "min_face_ratio": 0.18,
+                "max_abs_yaw": 0.35,
+                "max_abs_pitch": 0.30,
+            },
+        }
+    }
+
+
 @app.post("/v1/embed")
 def embed() -> Response:
     return JSONResponse(
@@ -30,8 +47,7 @@ def embed() -> Response:
         content={
             "error": {
                 "code": "NOT_IMPLEMENTED",
-                "message": "faceclock-inference is running the Fase 0 stub — "
-                "real embedding arrives in Fase 2",
+                "message": "faceclock-inference is running the Fase 0 stub - real embedding arrives in Fase 2",
                 "request_id": "stub",
             }
         },

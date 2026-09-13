@@ -1,9 +1,11 @@
 COMPOSE := docker compose -f deploy/docker-compose.yml
-API_DIR := apps/faceclock-api
-WEB_DIR := apps/faceclock-web
+DEV_COMPOSE := $(COMPOSE) -f deploy/docker-compose.override.yml
+API_DIR := apps/backend
+WEB_DIR := apps/frontend
 INF_DIR := services/faceclock-inference
 
-.PHONY: up down reset logs migrate-up migrate-down migrate-new db-status psql lint test fmt
+.PHONY: up down reset logs migrate-up migrate-down migrate-new db-status psql lint test fmt \
+	dev-db dev-db-down ai-up ai-down ai-logs dev-api dev-web dev-backend dev-be dev-frontend dev-fe
 
 up:
 	$(COMPOSE) up -d --build
@@ -17,6 +19,45 @@ reset:
 
 logs:
 	$(COMPOSE) logs -f $(s)
+
+# ── Hybrid Development (deploy/HYBRID_DEV.md) ──────────────────────────────
+# Only postgres in Docker; faceclock-api/faceclock-web run on the host;
+# faceclock-inference is started on demand (RAM-heavy, only needed while
+# actually testing face enrollment/attendance).
+
+dev-db:
+	$(DEV_COMPOSE) up -d postgres
+
+dev-db-down:
+	$(DEV_COMPOSE) stop postgres
+
+ai-up:
+	$(DEV_COMPOSE) --profile ai up -d --build faceclock-inference
+
+ai-down:
+	$(DEV_COMPOSE) --profile ai stop faceclock-inference
+	$(DEV_COMPOSE) --profile ai rm -f faceclock-inference
+
+ai-logs:
+	$(DEV_COMPOSE) --profile ai logs -f faceclock-inference
+
+# Backend (BE) - Go REST API (apps/backend)
+dev-backend:
+	@if [ ! -f $(API_DIR)/.env.local ]; then \
+		echo "Missing $(API_DIR)/.env.local — copy it from $(API_DIR)/.env.local.example first"; \
+		exit 1; \
+	fi
+	cd $(API_DIR) && set -a && . ./.env.local && set +a && go run ./cmd/api
+
+dev-be: dev-backend
+dev-api: dev-backend
+
+# Frontend (FE) - Vite React App (apps/frontend)
+dev-frontend:
+	cd $(WEB_DIR) && npm run dev
+
+dev-fe: dev-frontend
+dev-web: dev-frontend
 
 # migrate-up/down/db-status run the migrate CLI FROM THE HOST (via `go run`,
 # build tag `pgx5` — golang-migrate's CLI ships with zero database drivers

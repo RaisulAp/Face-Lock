@@ -1,0 +1,29 @@
+# Rekomendasi batas resource WSL2 untuk laptop dev FaceClock (Hybrid
+# Development — lihat deploy/HYBRID_DEV.md).
+#
+# Ini FILE CONTOH, bukan yang otomatis dipakai Windows. WSL2's memory cap
+# adalah pengaturan MESIN (berlaku untuk semua distro WSL & Docker Desktop di
+# laptop ini, bukan cuma project ini), jadi sengaja tidak ditulis otomatis ke
+# lokasi aslinya oleh siapa pun/apa pun — terapkan sendiri:
+#
+#   1. Tutup semua distro WSL & Docker Desktop dulu:
+#        wsl --shutdown
+#   2. Copy isi file ini ke:  %UserProfile%\.wslconfig
+#      (kalau file itu sudah ada dan berisi setting lain, gabungkan manual,
+#      jangan ditimpa mentah-mentah)
+#   3. Buka lagi Docker Desktop / WSL.
+#
+# 4GB cukup untuk: Postgres (limit 512MB di docker-compose.override.yml) +
+# faceclock-inference saat dinyalakan (limit 1.5GB) + overhead WSL2/Docker
+# Desktop sendiri. Naikkan ke 6-8GB kalau laptop punya RAM >=16GB dan masih
+# terasa lag saat faceclock-inference aktif.
+
+[wsl2]
+memory=4GB
+processors=4
+swap=2GB
+
+# Wajib true (ini defaultnya) — tanpa ini, port yang dipublish container
+# (localhost:5433 untuk postgres, localhost:8000 untuk faceclock-inference)
+# tidak akan bisa diakses dari proses host Windows (go run / npm run dev).
+localhostForwarding=true

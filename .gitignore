@@ -4,9 +4,14 @@
 # Secrets
 deploy/.env
 **/.env
+**/.env.local
+**/.env.*.local
 !**/.env.example
 
 # Go
+apps/backend/bin/
+apps/backend/tmp/
+apps/backend/*.exe
 apps/faceclock-api/bin/
 apps/faceclock-api/tmp/
 apps/faceclock-api/*.exe
@@ -14,6 +19,7 @@ apps/faceclock-api/*.exe
 # Node
 node_modules/
 dist/
+apps/frontend/dist/
 apps/faceclock-web/dist/
 
 # Python
@@ -25,6 +31,8 @@ services/faceclock-inference/.venv/
 
 # Data lokal
 /data/
+apps/backend/data/
+apps/faceclock-api/data/
 *.onnx
 
 # OS / editor

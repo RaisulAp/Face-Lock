@@ -36,6 +36,8 @@ services:
     environment:
       FACE_ENGINE_TOKEN: ${FACE_ENGINE_TOKEN:-}
       TZ: UTC
+    volumes:
+      - ../services/faceclock-inference/app:/app/app
     # Sengaja TANPA `ports:` — hanya faceclock-api yang boleh menghubungi
     # service ini, lewat network internal compose (Fase 0 § 2.9).
     expose:
@@ -45,7 +47,7 @@ services:
 
   faceclock-api:
     build:
-      context: ../apps/faceclock-api
+      context: ../apps/backend
       args:
         VERSION: ${VERSION:-0.1.0}
         COMMIT: ${COMMIT:-dev}
@@ -81,12 +83,16 @@ services:
 
   faceclock-web:
     build:
-      context: ../apps/faceclock-web
+      context: ../apps/frontend
       target: dev
     environment:
-      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080}
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
     ports:
       - "5173:5173"
+    volumes:
+      - ../apps/frontend/src:/app/src
+      - ../apps/frontend/index.html:/app/index.html
+      - ../apps/frontend/vite.config.ts:/app/vite.config.ts
     depends_on:
       - faceclock-api
     networks:

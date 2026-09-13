@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.git/
+
+# Host-only overrides (Hybrid Development sets BACKEND_URL=http://localhost:8080
+# here, which is wrong inside a container — never let it get baked into the
+# dev-stage image via `COPY . .`).
+.env
+.env.local
+.env.*.local
