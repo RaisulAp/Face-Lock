@@ -62,7 +62,7 @@ func TestEmployeeFaceEnrollment(t *testing.T) {
 	// Create test employee
 	empNum := fmt.Sprintf("EMP-FE-%d", time.Now().UnixNano()%1000000)
 	emp, err := empSvc.Create(ctx, employee.CreateParams{
-		EmployeeNumber: empNum,
+		EmployeeNumber: &empNum,
 		FullName:       "Face Enrollment Test Employee",
 	})
 	if err != nil {

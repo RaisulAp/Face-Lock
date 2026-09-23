@@ -34,6 +34,7 @@ import {
 // Subcomponents
 import { UserOnboardingGuide } from "../components/UserOnboardingGuide";
 import { UserFormModal } from "../components/UserFormModal";
+import { RegisterEmployeeModal } from "../components/RegisterEmployeeModal";
 import { UserRolesModal } from "../components/UserRolesModal";
 import { ResetPasswordModal } from "../components/ResetPasswordModal";
 import { UserCredentialsModal } from "../components/UserCredentialsModal";
@@ -753,29 +754,26 @@ export function UsersPage() {
         </CardContent>
       </Card>
 
-      {/* Modal: Create User */}
-      <UserFormModal
+      {/* Modal: Single-step registration (creates employee + login account) */}
+      <RegisterEmployeeModal
         open={createModalOpen}
         onClose={() => setCreateModalOpen(false)}
-        rolesList={rolesList}
-        isSuperAdmin={isSuperAdmin}
-        onSuccessCreate={({ user, temporaryPassword }) => {
+        onSuccess={(result) => {
           toast.show({
             type: "success",
-            title: "Pengguna Berhasil Dibuat",
-            message: `Akun ${user.email} berhasil didaftarkan.`,
+            title: "Karyawan Berhasil Didaftarkan",
+            message: `Akun ${result.email} dan data karyawan dibuat sekaligus.`,
           });
           refetch();
 
-          // Open credentials modal
+          // Show the one-time credentials so the admin can hand them over.
           setCredentialsData({
-            email: user.email,
-            temporaryPassword,
-            actionTitle: "Akun Pengguna Baru Berhasil Dibuat",
+            email: result.email,
+            temporaryPassword: result.temporary_password,
+            actionTitle: "Akun Karyawan Baru Berhasil Dibuat",
           });
           setCredentialsModalOpen(true);
         }}
-        onSuccessUpdate={() => { }}
       />
 
       {/* Modal: Edit User */}

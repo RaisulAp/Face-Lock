@@ -35,10 +35,9 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ip := r.RemoteAddr
-	if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
-		ip = forwarded
-	}
+	// httpx.ClientIP strips the port from RemoteAddr; without this the
+	// value never parses and every refresh_tokens.ip_address is stored NULL.
+	ip := httpx.ClientIP(r)
 
 	res, err := h.svc.Login(r.Context(), LoginInput{
 		Email:      req.Email,
@@ -84,10 +83,7 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 		tokenStr = req.RefreshToken
 	}
 
-	ip := r.RemoteAddr
-	if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
-		ip = forwarded
-	}
+	ip := httpx.ClientIP(r)
 
 	res, err := h.svc.Refresh(r.Context(), tokenStr, ip, r.UserAgent())
 	if err != nil {

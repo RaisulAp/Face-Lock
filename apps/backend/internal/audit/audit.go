@@ -101,10 +101,10 @@ func (r *Recorder) RecordFromRequest(req *http.Request, action, resourceType str
 	}
 
 	reqID := middleware.RequestIDFromContext(req.Context())
-	ip := req.RemoteAddr
-	if forwarded := req.Header.Get("X-Forwarded-For"); forwarded != "" {
-		ip = forwarded
-	}
+	// httpx.ClientIP strips the port that req.RemoteAddr carries; passing the
+	// raw value here previously made every insert fail against the `ip inet`
+	// column.
+	ip := httpx.ClientIP(req)
 
 	return r.Record(req.Context(), LogEntry{
 		ActorUserID:  actorID,

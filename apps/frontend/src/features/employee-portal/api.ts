@@ -26,15 +26,29 @@ export interface AttendanceHistoryParams {
 
 export interface EmployeeProfileData {
     id: string;
-    user_id: string;
-    employee_number: string;
-    name: string;
-    email: string;
+    employee_number: string | null;
+    full_name: string;
+    email: string | null;
     department: string | null;
     position: string | null;
     phone: string | null;
-    status: "active" | "inactive" | "suspended";
+    join_date: string | null;
+    employment_status: string;
+    office_location_name: string | null;
+    /** True once NIP, position and join date are all filled in. */
+    profile_completed: boolean;
     created_at: string;
+}
+
+/**
+ * The only fields an employee may set on their own record. Kept in sync with
+ * employee.SelfProfileParams on the backend.
+ */
+export interface SelfProfilePayload {
+    employee_number?: string;
+    position?: string;
+    join_date?: string;
+    phone?: string;
 }
 
 export const employeeApi = {
@@ -134,6 +148,12 @@ export const employeeApi = {
 
     // Profile & Security
     getMyProfile: () => api.get<EmployeeProfileData>("/api/v1/employees/me"),
+
+    // Self-service completion of HR fields left blank at registration.
+    // Only the four whitelisted fields are ever sent; the backend ignores
+    // anything else, so this cannot be used to edit privileged data.
+    completeMyProfile: (payload: SelfProfilePayload) =>
+        api.patch<EmployeeProfileData>("/api/v1/employees/me/profile", payload),
 
     changePassword: (currentPassword: string, newPassword: string) =>
         api.post<void>("/api/v1/auth/change-password", {

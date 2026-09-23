@@ -23,22 +23,24 @@ type Handlers struct {
 	AuthChangePassword http.HandlerFunc
 
 	// Employees
-	EmployeeList    http.HandlerFunc
-	EmployeeCreate  http.HandlerFunc
-	EmployeeGetMe   http.HandlerFunc
-	EmployeeGetByID http.HandlerFunc
-	EmployeeUpdate  http.HandlerFunc
-	EmployeeDelete  http.HandlerFunc
+	EmployeeList        http.HandlerFunc
+	EmployeeCreate      http.HandlerFunc
+	EmployeeGetMe       http.HandlerFunc
+	EmployeeCompleteOwn http.HandlerFunc
+	EmployeeGetByID     http.HandlerFunc
+	EmployeeUpdate      http.HandlerFunc
+	EmployeeDelete      http.HandlerFunc
 
 	// Users
-	UserList          http.HandlerFunc
-	UserCreate        http.HandlerFunc
-	UserGetByID       http.HandlerFunc
-	UserUpdate        http.HandlerFunc
-	UserDelete        http.HandlerFunc
-	UserUpdateStatus  http.HandlerFunc
-	UserAssignRoles   http.HandlerFunc
-	UserResetPassword http.HandlerFunc
+	UserList             http.HandlerFunc
+	UserCreate           http.HandlerFunc
+	UserRegisterEmployee http.HandlerFunc
+	UserGetByID          http.HandlerFunc
+	UserUpdate           http.HandlerFunc
+	UserDelete           http.HandlerFunc
+	UserUpdateStatus     http.HandlerFunc
+	UserAssignRoles      http.HandlerFunc
+	UserResetPassword    http.HandlerFunc
 
 	// Roles & Permissions
 	RoleList              http.HandlerFunc
@@ -230,6 +232,13 @@ func mountAPIv1(r chi.Router, deps RouterDeps) {
 			if deps.Handlers.EmployeeGetMe != nil {
 				r.With(rbacGuard(deps, "employee.read_self")).Get("/employees/me", deps.Handlers.EmployeeGetMe)
 			}
+			// Self-service profile completion. Registered BEFORE "/employees/{id}"
+			// is irrelevant here because chi matches on the literal "/me/profile"
+			// segment, but the path is kept distinct from the admin PATCH so the
+			// narrower permission cannot be reached through the admin route.
+			if deps.Handlers.EmployeeCompleteOwn != nil {
+				r.With(rbacGuard(deps, "employee.update_self")).Patch("/employees/me/profile", deps.Handlers.EmployeeCompleteOwn)
+			}
 			if deps.Handlers.EmployeeGetByID != nil {
 				r.With(rbacAnyGuard(deps, "employee.read", "employee.read_self")).Get("/employees/{id}", deps.Handlers.EmployeeGetByID)
 			}
@@ -246,6 +255,11 @@ func mountAPIv1(r chi.Router, deps RouterDeps) {
 			}
 			if deps.Handlers.UserCreate != nil {
 				r.With(rbacGuard(deps, "user.create")).Post("/users", deps.Handlers.UserCreate)
+			}
+			// Single-step registration: creates the employee row and the login
+			// account together, so it needs both employee.create and user.create.
+			if deps.Handlers.UserRegisterEmployee != nil {
+				r.With(rbacGuard(deps, "user.create")).Post("/users/register-employee", deps.Handlers.UserRegisterEmployee)
 			}
 			if deps.Handlers.UserGetByID != nil {
 				r.With(rbacGuard(deps, "user.read")).Get("/users/{id}", deps.Handlers.UserGetByID)
@@ -441,20 +455,25 @@ func mountAPIv1(r chi.Router, deps RouterDeps) {
 			}
 
 			// Fase 4: Office Locations (#66 - #70)
+			// Path MUST stay /office-locations: the web client and the handler
+			// doc comments both use that contract. Registering /locations here
+			// silently returned 404 for every create/update request.
 			if deps.Handlers.LocationList != nil {
-				r.With(rbacGuard(deps, "location.read")).Get("/locations", deps.Handlers.LocationList)
+				r.With(rbacGuard(deps, "location.read")).Get("/office-locations", deps.Handlers.LocationList)
 			}
 			if deps.Handlers.LocationCreate != nil {
-				r.With(rbacGuard(deps, "location.create")).Post("/locations", deps.Handlers.LocationCreate)
+				r.With(rbacGuard(deps, "location.create")).Post("/office-locations", deps.Handlers.LocationCreate)
 			}
 			if deps.Handlers.LocationGetByID != nil {
-				r.With(rbacGuard(deps, "location.read")).Get("/locations/{id}", deps.Handlers.LocationGetByID)
+				r.With(rbacGuard(deps, "location.read")).Get("/office-locations/{id}", deps.Handlers.LocationGetByID)
 			}
 			if deps.Handlers.LocationUpdate != nil {
-				r.With(rbacGuard(deps, "location.update")).Patch("/locations/{id}", deps.Handlers.LocationUpdate)
+				update := r.With(rbacGuard(deps, "location.update"))
+				update.Patch("/office-locations/{id}", deps.Handlers.LocationUpdate)
+				update.Put("/office-locations/{id}", deps.Handlers.LocationUpdate)
 			}
 			if deps.Handlers.LocationDelete != nil {
-				r.With(rbacGuard(deps, "location.delete")).Delete("/locations/{id}", deps.Handlers.LocationDelete)
+				r.With(rbacGuard(deps, "location.delete")).Delete("/office-locations/{id}", deps.Handlers.LocationDelete)
 			}
 		})
 	})

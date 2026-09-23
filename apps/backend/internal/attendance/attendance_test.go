@@ -66,7 +66,7 @@ func TestAttendanceFlow(t *testing.T) {
 	// Create employee
 	empNum := fmt.Sprintf("EMP-ATT-%d", time.Now().UnixNano()%1000000)
 	emp, err := empSvc.Create(ctx, employee.CreateParams{
-		EmployeeNumber: empNum,
+		EmployeeNumber: &empNum,
 		FullName:       "Attendance Test Employee",
 	})
 	if err != nil {

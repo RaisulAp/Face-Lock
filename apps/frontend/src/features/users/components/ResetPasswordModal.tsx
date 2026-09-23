@@ -114,6 +114,8 @@ export function ResetPasswordModal({
                         </label>
                         <Input
                             type="password"
+                            showPasswordToggle
+                            autoComplete="new-password"
                             required
                             minLength={10}
                             placeholder="Ketik kata sandi baru..."

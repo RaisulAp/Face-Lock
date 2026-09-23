@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import {
-    Users,
     Shield,
     KeyRound,
     AlertCircle,
@@ -18,6 +17,16 @@ import { Modal } from "../../../components/ui/Modal";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
 
+/**
+ * Account editing and standalone account creation.
+ *
+ * Note: creating an account that is linked to an employee is now handled by
+ * RegisterEmployeeModal through POST /api/v1/users/register-employee, which
+ * creates the employee row and the login account in one step. This modal keeps
+ * only the two remaining jobs:
+ *   1. editing an existing account (email, linked employee, active flag), and
+ *   2. creating a non-employee "standalone" system account.
+ */
 interface UserFormModalProps {
     open: boolean;
     onClose: () => void;
@@ -41,7 +50,6 @@ export function UserFormModal({
     const isEdit = Boolean(userToEdit);
 
     // Form states
-    const [accountType, setAccountType] = useState<"employee" | "standalone">("employee");
     const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>("");
     const [email, setEmail] = useState("");
     const [passwordMode, setPasswordMode] = useState<"auto" | "manual">("auto");
@@ -52,24 +60,19 @@ export function UserFormModal({
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    // Query unlinked employees
-    const { data: unlinkedEmployees = [], isLoading: isLoadingEmployees } = useQuery({
-        queryKey: ["employees-unlinked"],
-        queryFn: async () => {
-            const res = await api.getWithMeta<EmployeeItem[]>("/api/v1/employees?has_user=false&per_page=100");
-            return res.data;
-        },
-        enabled: open && !isEdit,
-    });
+    // The employee linker is only offered in edit mode for existing employee
+    // records. Standalone accounts never need the list, so it stays disabled
+    // unless we are explicitly editing an employee-linked account.
+    const [enableEmployeeLink, setEnableEmployeeLink] = useState(false);
 
-    // Query all active employees for edit mode if needed
-    const { data: allEmployees = [] } = useQuery({
+    // Query all active employees, used by the edit-mode employee relinker.
+    const { data: allEmployees = [], isLoading: isLoadingEmployees } = useQuery({
         queryKey: ["employees-all-active"],
         queryFn: async () => {
             const res = await api.getWithMeta<EmployeeItem[]>("/api/v1/employees?per_page=100");
             return res.data;
         },
-        enabled: open && isEdit,
+        enabled: open && isEdit && enableEmployeeLink,
     });
 
     // Reset or initialize on open
@@ -79,40 +82,28 @@ export function UserFormModal({
             if (userToEdit) {
                 setEmail(userToEdit.email);
                 setSelectedEmployeeId(userToEdit.employee_id || "");
-                setAccountType(userToEdit.employee_id ? "employee" : "standalone");
                 setIsActive(userToEdit.is_active);
+                setEnableEmployeeLink(false);
             } else {
                 setEmail("");
                 setSelectedEmployeeId("");
-                setAccountType("employee");
                 setPasswordMode("auto");
                 setManualPassword("");
                 setMustChangePassword(true);
                 setIsActive(true);
+                setEnableEmployeeLink(false);
 
-                // Pre-select employee role by default if available, or first available role
-                const employeeRole = rolesList.find((r) => r.name === "employee");
-                if (employeeRole) {
-                    setSelectedRoleId(employeeRole.id);
-                } else if (rolesList.length > 0 && rolesList[0]) {
-                    setSelectedRoleId(rolesList[0].id);
-                } else {
-                    setSelectedRoleId("");
-                }
+                // Standalone accounts are the only creation path left here, and
+                // the employee role makes no sense for them, so prefer a
+                // non-employee role when one is available.
+                const fallbackRole =
+                    rolesList.find((r) => r.name !== "employee" && r.name !== "super_admin") ||
+                    rolesList.find((r) => r.name === "employee") ||
+                    rolesList[0];
+                setSelectedRoleId(fallbackRole ? fallbackRole.id : "");
             }
         }
     }, [open, userToEdit, rolesList]);
-
-    // Handle employee selection in create mode
-    const handleEmployeeChange = (empId: string) => {
-        setSelectedEmployeeId(empId);
-        if (!empId) return;
-
-        const emp = unlinkedEmployees.find((e) => e.id === empId);
-        if (emp && emp.email) {
-            setEmail(emp.email);
-        }
-    };
 
     const handleSelectRole = (roleId: string, roleName: string) => {
         if (roleName === "super_admin" && !isSuperAdmin) {
@@ -150,10 +141,10 @@ export function UserFormModal({
                     email: trimmedEmail,
                     is_active: isActive,
                 };
-                if (accountType === "standalone") {
-                    payload.employee_id = null;
-                } else if (selectedEmployeeId) {
-                    payload.employee_id = selectedEmployeeId;
+                // Only touch employee_id when the admin explicitly opted in to
+                // relinking, so a plain email change never detaches an account.
+                if (enableEmployeeLink) {
+                    payload.employee_id = selectedEmployeeId || null;
                 }
 
                 const res = await api.patch<{ data: User }>(`/api/v1/users/${userToEdit.id}`, payload);
@@ -161,15 +152,13 @@ export function UserFormModal({
                 onSuccessUpdate(updated);
                 onClose();
             } else {
+                // Standalone (non-employee) system account. Employee-linked
+                // accounts are created through RegisterEmployeeModal instead.
                 const payload: Record<string, unknown> = {
                     email: trimmedEmail,
                     role_ids: [selectedRoleId],
                     must_change_password: mustChangePassword,
                 };
-
-                if (accountType === "employee" && selectedEmployeeId) {
-                    payload.employee_id = selectedEmployeeId;
-                }
 
                 if (passwordMode === "manual" && manualPassword) {
                     payload.password = manualPassword;
@@ -193,8 +182,7 @@ export function UserFormModal({
         }
     };
 
-    const selectedEmployeeObj =
-        (isEdit ? allEmployees : unlinkedEmployees).find((e) => e.id === selectedEmployeeId);
+    const selectedEmployeeObj = allEmployees.find((e) => e.id === selectedEmployeeId);
 
     return (
         <Modal
@@ -204,7 +192,7 @@ export function UserFormModal({
             description={
                 isEdit
                     ? "Perbarui email atau relasi karyawan untuk akun ini."
-                    : "Pilih karyawan atau buat akun sistem mandiri. Kredensial login akan diberikan setelah dibuat."
+                    : "Buat akun sistem tanpa data karyawan. Untuk mendaftarkan karyawan beserta akun login-nya, gunakan tombol Daftarkan Karyawan."
             }
             maxWidth="lg"
         >
@@ -216,92 +204,72 @@ export function UserFormModal({
                     </div>
                 )}
 
-                {/* Account Type Toggle */}
                 {!isEdit && (
-                    <div className="space-y-1.5">
-                        <label className="block text-xs font-semibold text-gray-700">
-                            Jenis Akun Pengguna
-                        </label>
-                        <div className="grid grid-cols-2 gap-2 p-1 bg-gray-100 rounded-xl">
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setAccountType("employee");
-                                    setError(null);
-                                }}
-                                className={`py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition ${accountType === "employee"
-                                    ? "bg-white text-indigo-700 shadow-2xs"
-                                    : "text-gray-600 hover:text-gray-900"
-                                    }`}
-                            >
-                                <Users className="w-3.5 h-3.5" />
-                                <span>Tautkan ke Karyawan</span>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setAccountType("standalone");
-                                    setSelectedEmployeeId("");
-                                    setError(null);
-                                }}
-                                className={`py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition ${accountType === "standalone"
-                                    ? "bg-white text-indigo-700 shadow-2xs"
-                                    : "text-gray-600 hover:text-gray-900"
-                                    }`}
-                            >
-                                <Shield className="w-3.5 h-3.5" />
-                                <span>Akun Khusus (Non-Karyawan)</span>
-                            </button>
-                        </div>
+                    <div className="p-3 bg-indigo-50/50 border border-indigo-100 rounded-xl flex gap-2 text-[11px] text-indigo-900 leading-relaxed">
+                        <Shield className="w-4 h-4 shrink-0 text-indigo-500 mt-0.5" />
+                        <span>
+                            Formulir ini hanya membuat <strong>akun sistem non-karyawan</strong> (mis. admin
+                            atau auditor). Untuk karyawan, gunakan <strong>Daftarkan Karyawan</strong> agar data
+                            karyawan dan akun login dibuat sekaligus.
+                        </span>
                     </div>
                 )}
 
-                {/* Employee Selection Dropdown (if employee mode) */}
-                {accountType === "employee" && (
-                    <div className="space-y-2 p-3 bg-indigo-50/40 border border-indigo-100 rounded-xl">
-                        <label className="block text-xs font-bold text-indigo-950">
-                            Pilih Karyawan yang Belum Memiliki Akun
+                {/* Employee Link (edit mode only, opt-in) */}
+                {isEdit && (
+                    <div className="space-y-2">
+                        <label className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={enableEmployeeLink}
+                                onChange={(e) => {
+                                    setEnableEmployeeLink(e.target.checked);
+                                    if (!e.target.checked) setSelectedEmployeeId("");
+                                }}
+                                className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                            />
+                            <span>Ubah relasi karyawan untuk akun ini</span>
                         </label>
 
-                        <select
-                            value={selectedEmployeeId}
-                            onChange={(e) => handleEmployeeChange(e.target.value)}
-                            className="w-full text-xs rounded-lg border border-gray-300 bg-white py-2 px-3 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
-                            disabled={isLoadingEmployees}
-                        >
-                            <option value="">-- Pilih salah satu data karyawan --</option>
-                            {(isEdit ? allEmployees : unlinkedEmployees).map((emp) => (
-                                <option key={emp.id} value={emp.id}>
-                                    {emp.full_name} ({emp.employee_number}) - {emp.department || "Tanpa Divisi"}
-                                </option>
-                            ))}
-                        </select>
+                        {enableEmployeeLink && (
+                            <div className="space-y-2 p-3 bg-indigo-50/40 border border-indigo-100 rounded-xl">
+                                <select
+                                    value={selectedEmployeeId}
+                                    onChange={(e) => setSelectedEmployeeId(e.target.value)}
+                                    className="w-full text-xs rounded-lg border border-gray-300 bg-white py-2 px-3 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                                    disabled={isLoadingEmployees}
+                                >
+                                    <option value="">
+                                        {isLoadingEmployees ? "-- Memuat data karyawan --" : "-- Lepas relasi karyawan (jadikan akun sistem) --"}
+                                    </option>
+                                    {allEmployees.map((emp) => (
+                                        <option key={emp.id} value={emp.id}>
+                                            {emp.full_name} ({emp.employee_number}) - {emp.department || "Tanpa Divisi"}
+                                        </option>
+                                    ))}
+                                </select>
 
-                        {unlinkedEmployees.length === 0 && !isLoadingEmployees && !isEdit && (
-                            <p className="text-[11px] text-amber-700 bg-amber-50 p-2 rounded border border-amber-200">
-                                Catatan: Semua karyawan aktif saat ini sudah memiliki akun pengguna. Anda dapat memilih <strong>Akun Khusus (Non-Karyawan)</strong> di atas jika ingin membuat akun sistem baru.
-                            </p>
-                        )}
-
-                        {selectedEmployeeObj && (
-                            <div className="p-2.5 bg-white rounded-lg border border-indigo-100 text-xs space-y-1">
-                                <div className="font-semibold text-gray-900 flex items-center gap-1.5">
-                                    <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
-                                    {selectedEmployeeObj.full_name}
-                                </div>
-                                <div className="flex items-center gap-3 text-[11px] text-gray-500">
-                                    <span>NIK: {selectedEmployeeObj.employee_number}</span>
-                                    {selectedEmployeeObj.department && (
-                                        <span className="flex items-center gap-1">
-                                            <Building2 className="w-3 h-3" /> {selectedEmployeeObj.department}
-                                        </span>
-                                    )}
-                                    {selectedEmployeeObj.position && (
-                                        <span className="flex items-center gap-1">
-                                            <Briefcase className="w-3 h-3" /> {selectedEmployeeObj.position}
-                                        </span>
-                                    )}
-                                </div>
+                                {selectedEmployeeObj && (
+                                    <div className="p-2.5 bg-white rounded-lg border border-indigo-100 text-xs space-y-1">
+                                        <div className="font-semibold text-gray-900 flex items-center gap-1.5">
+                                            <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
+                                            {selectedEmployeeObj.full_name}
+                                        </div>
+                                        <div className="flex items-center gap-3 text-[11px] text-gray-500">
+                                            <span>NIK: {selectedEmployeeObj.employee_number}</span>
+                                            {selectedEmployeeObj.department && (
+                                                <span className="flex items-center gap-1">
+                                                    <Building2 className="w-3 h-3" /> {selectedEmployeeObj.department}
+                                                </span>
+                                            )}
+                                            {selectedEmployeeObj.position && (
+                                                <span className="flex items-center gap-1">
+                                                    <Briefcase className="w-3 h-3" /> {selectedEmployeeObj.position}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
@@ -367,6 +335,8 @@ export function UserFormModal({
                             <div className="space-y-1">
                                 <Input
                                     type="password"
+                                    showPasswordToggle
+                                    autoComplete="new-password"
                                     placeholder="Ketik kata sandi manual (min. 10 karakter)"
                                     value={manualPassword}
                                     onChange={(e) => setManualPassword(e.target.value)}

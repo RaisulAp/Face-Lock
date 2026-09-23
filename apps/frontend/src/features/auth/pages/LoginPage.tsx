@@ -104,6 +104,8 @@ export function LoginPage() {
                             <div className="relative">
                                 <Input
                                     type="password"
+                                    showPasswordToggle
+                                    autoComplete="current-password"
                                     required
                                     placeholder={t("login.passwordPlaceholder", { ns: "auth" })}
                                     value={password}

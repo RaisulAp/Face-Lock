@@ -3,7 +3,6 @@ package consent
 import (
 	"errors"
 	"net/http"
-	"strings"
 
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/httpx"
 	"github.com/faceclock/faceclock/apps/faceclock-api/internal/rbac"
@@ -150,12 +149,12 @@ func (h *Handler) AdminRecordConsent(w http.ResponseWriter, r *http.Request) {
 	httpx.Created(w, res)
 }
 
+// clientIP delegates to httpx.ClientIP so consent records the same bare,
+// validated client address as every other audit-bearing path. The previous
+// inline version returned r.RemoteAddr unstripped in the fallback case, which
+// carries a port and is rejected by the `inet` column it is written to.
 func clientIP(r *http.Request) string {
-	if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
-		parts := strings.Split(forwarded, ",")
-		return strings.TrimSpace(parts[0])
-	}
-	return r.RemoteAddr
+	return httpx.ClientIP(r)
 }
 
 func handleError(w http.ResponseWriter, r *http.Request, err error) {

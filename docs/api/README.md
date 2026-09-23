@@ -27,5 +27,22 @@ distribusi paket berversi terpisah. Lihat
 | 6 | Konsumen murni — tidak ada endpoint baru | [Plan/07-Fase6.md](../../Plan/07-Fase6.md) |
 | 7 | Konsumen murni — tidak ada endpoint baru | [Plan/08-Fase7.md](../../Plan/08-Fase7.md) |
 
+## Endpoint pasca-fase
+
+Ditambahkan setelah Fase 6, sebagai konsekuensi dari pendaftaran satu-langkah
+(migration `000025`), yang membuat HR tidak lagi mengisi seluruh data karyawan
+sehingga karyawan perlu melengkapi sendiri.
+
+| Endpoint | Guard | Ditambahkan |
+|---|---|---|
+| `PATCH /api/v1/employees/me/profile` | `employee.update_self` | migration `000026` |
+
+**Kontrak**: hanya menerima `employee_number`, `position`, `join_date`, dan
+`phone`. Field admin-only (`employment_status`, `department`, `email`,
+`office_location_id`) **ditolak dengan 400**, bukan diabaikan diam-diam, karena
+`httpx.DecodeAndValidate` mengaktifkan `DisallowUnknownFields`. Aturan
+`profile_completed` menjadi `true` saat NIP, jabatan, dan tanggal masuk terisi —
+sama persis dengan aturan pada `PATCH /api/v1/employees/{id}` milik admin.
+
 Katalog endpoint lengkap dan revisinya ada di
 [Plan/09-Revisions-Log.md § 2 B](../../Plan/09-Revisions-Log.md#b-perubahan-katalog-endpoint).

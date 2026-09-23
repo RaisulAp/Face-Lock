@@ -2,12 +2,59 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../../../lib/auth/useAuth";
-import { api } from "../../../lib/api";
+import { api, ApiError } from "../../../lib/api";
 import { useToast } from "../../../components/ui/Toast";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
 import { Card, CardHeader, CardTitle, CardContent } from "../../../components/ui/Card";
 import { User, KeyRound, Shield, LogOut } from "lucide-react";
+
+// The backend already distinguishes *why* a password change failed (wrong old
+// password vs. a rule on the new one). Surface that reason instead of collapsing
+// every failure into one generic "check your old password" message.
+// Keys are the API error codes returned in the envelope's `error.code`.
+const PASSWORD_ERROR_MESSAGES: Record<string, string> = {
+    INVALID_CREDENTIALS: "Kata sandi lama yang Anda masukkan salah.",
+    CONFLICT: "Kata sandi baru tidak boleh sama dengan kata sandi lama.",
+    VALIDATION_ERROR: "Kata sandi baru tidak memenuhi persyaratan.",
+    UNAUTHENTICATED: "Sesi Anda sudah berakhir. Silakan masuk kembali.",
+};
+
+// Map the raw (English) validation strings to user-facing Indonesian copy.
+const PASSWORD_VALIDATION_DETAILS: Record<string, string> = {
+    "password must contain both letters and numbers":
+        "Kata sandi baru harus berisi huruf dan angka.",
+    "password is too common or easily guessed":
+        "Kata sandi baru terlalu umum dan mudah ditebak.",
+};
+
+function describePasswordError(error: unknown): string {
+    if (!(error instanceof ApiError)) {
+        return "Terjadi kesalahan yang tidak terduga. Coba lagi sebentar lagi.";
+    }
+
+    // 1. A field-level detail is the most precise source when present.
+    const fieldMessage = error.details?.find((d) => d.message)?.message;
+    const raw = fieldMessage ?? error.message;
+
+    // 2. Translate known server strings, including the dynamic min-length rule.
+    if (raw) {
+        const known = PASSWORD_VALIDATION_DETAILS[raw];
+        if (known) return known;
+
+        const minLength = /^password must be at least (\d+) characters$/.exec(raw);
+        if (minLength) {
+            return `Kata sandi baru minimal ${minLength[1]} karakter.`;
+        }
+    }
+
+    // 3. Fall back to the reason implied by the error code.
+    const byCode = error.code ? PASSWORD_ERROR_MESSAGES[error.code] : undefined;
+    if (byCode) return byCode;
+
+    // 4. Last resort: still show something more useful than a fixed sentence.
+    return raw || "Gagal mengubah kata sandi.";
+}
 
 export function AccountPage() {
     const { t } = useTranslation(["auth", "common"]);
@@ -57,11 +104,11 @@ export function AccountPage() {
             setConfirmPassword("");
             await refetchUser();
             navigate("/dashboard");
-        } catch {
+        } catch (error) {
             toast.show({
                 type: "error",
                 title: "Gagal Mengubah Kata Sandi",
-                message: "Periksa kembali kata sandi lama Anda.",
+                message: describePasswordError(error),
             });
         } finally {
             setIsChanging(false);
@@ -168,6 +215,8 @@ export function AccountPage() {
                                 <label className="block text-xs font-medium text-gray-700 mb-1">Kata Sandi Lama</label>
                                 <Input
                                     type="password"
+                                    showPasswordToggle
+                                    autoComplete="current-password"
                                     required
                                     value={oldPassword}
                                     onChange={(e) => setOldPassword(e.target.value)}
@@ -179,10 +228,13 @@ export function AccountPage() {
                                 <label className="block text-xs font-medium text-gray-700 mb-1">Kata Sandi Baru</label>
                                 <Input
                                     type="password"
+                                    showPasswordToggle
+                                    autoComplete="new-password"
                                     required
                                     value={newPassword}
                                     onChange={(e) => setNewPassword(e.target.value)}
-                                    placeholder="Minimal 8 karakter"
+                                    placeholder="Minimal 10 karakter"
+                                    helperText="Gunakan minimal 10 karakter, kombinasi huruf dan angka."
                                 />
                             </div>
 
@@ -192,6 +244,8 @@ export function AccountPage() {
                                 </label>
                                 <Input
                                     type="password"
+                                    showPasswordToggle
+                                    autoComplete="new-password"
                                     required
                                     value={confirmPassword}
                                     onChange={(e) => setConfirmPassword(e.target.value)}

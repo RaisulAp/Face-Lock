@@ -57,7 +57,7 @@ func TestEmployeeServiceAndHandler(t *testing.T) {
 	email := "alpha@example.com"
 
 	created, err := svc.Create(ctx, CreateParams{
-		EmployeeNumber:   empNum,
+		EmployeeNumber:   &empNum,
 		FullName:         empName,
 		Department:       &dept,
 		Position:         &pos,
@@ -69,13 +69,13 @@ func TestEmployeeServiceAndHandler(t *testing.T) {
 	if err != nil {
 		t.Fatalf("svc.Create failed: %v", err)
 	}
-	if created.EmployeeNumber != empNum {
-		t.Errorf("expected empNum %s, got %s", empNum, created.EmployeeNumber)
+	if created.EmployeeNumber == nil || *created.EmployeeNumber != empNum {
+		t.Errorf("expected empNum %s, got %v", empNum, created.EmployeeNumber)
 	}
 
 	// 2. Duplicate EmployeeNumber
 	_, err = svc.Create(ctx, CreateParams{
-		EmployeeNumber:   empNum,
+		EmployeeNumber:   &empNum,
 		FullName:         "Duplicate",
 		Department:       &dept,
 		Position:         &pos,
@@ -148,7 +148,7 @@ func TestEmployeeServiceAndHandler(t *testing.T) {
 	hDept := "Product"
 	hPos := "PM"
 	cBody, _ := json.Marshal(CreateParams{
-		EmployeeNumber:   newEmpNum,
+		EmployeeNumber:   &newEmpNum,
 		FullName:         "Handler Test Employee",
 		Department:       &hDept,
 		Position:         &hPos,
@@ -310,8 +310,9 @@ func TestEmployeeServiceAndHandler(t *testing.T) {
 	gDept := "HR"
 	gPos := "HR Officer"
 	gJoinDate := "2026-01-01"
+	guardEmpNum := fmt.Sprintf("EMP-%d", (time.Now().UnixNano()+2)%1000000)
 	guardEmp, err := svc.Create(ctx, CreateParams{
-		EmployeeNumber:   fmt.Sprintf("EMP-%d", (time.Now().UnixNano()+2)%1000000),
+		EmployeeNumber:   &guardEmpNum,
 		FullName:         "Active User Emp",
 		Department:       &gDept,
 		Position:         &gPos,

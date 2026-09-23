@@ -779,15 +779,23 @@ func parsePagination(r *http.Request) (page, perPage int) {
 	return page, perPage
 }
 
+// extractClientIP returns the caller's bare IP address, preferring X-Real-IP
+// over X-Forwarded-For since this deployment sets the former at the edge.
+//
+// The parsing (port stripping, IPv6 brackets, validation) lives in
+// httpx.ClientIP so that attendance, audit and token issuance all agree on
+// what a "client IP" is. Previously this returned r.RemoteAddr verbatim, which
+// includes a port, and each consumer had to remember to strip it — one of them
+// did (attempts.go), the others silently recorded nothing.
 func extractClientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		parts := strings.Split(xff, ",")
-		return strings.TrimSpace(parts[0])
-	}
 	if xri := r.Header.Get("X-Real-IP"); xri != "" {
-		return strings.TrimSpace(xri)
+		if ip := httpx.ClientIP(&http.Request{
+			Header: http.Header{"X-Forwarded-For": []string{xri}},
+		}); ip != "" {
+			return ip
+		}
 	}
-	return r.RemoteAddr
+	return httpx.ClientIP(r)
 }
 
 func parseClockRequest(r *http.Request) (*ClockRequest, error) {

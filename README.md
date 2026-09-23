@@ -10,8 +10,8 @@ dan [`Plan/01-Fase0.md`](Plan/01-Fase0.md) untuk spesifikasi fondasi ini.
 ## Struktur monorepo
 
 ```
-apps/faceclock-api/          Go — REST API, RBAC, business logic
-apps/faceclock-web/          React — panel admin + halaman absensi web
+apps/backend/          Go — REST API, RBAC, business logic
+apps/frontend/          React — panel admin + halaman absensi web
 services/faceclock-inference/ Python/FastAPI — face embedding microservice
 deploy/                      docker-compose + env
 docs/adr/                    Keputusan arsitektur (ADR)

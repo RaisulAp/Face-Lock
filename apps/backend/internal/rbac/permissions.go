@@ -1,6 +1,8 @@
 package rbac
 
-// Complete catalog of the 34 system permissions defined in FaceClock Fase 1 (§ 2.3).
+// Complete catalog of the system permissions defined in FaceClock Fase 1 (§ 2.3),
+// plus employee.update_self added by migration 000026 for the self-service
+// profile completion flow introduced with single-step registration.
 const (
 	// User permissions
 	PermUserRead          = "user.read"
@@ -11,11 +13,12 @@ const (
 	PermUserResetPassword = "user.reset_password"
 
 	// Employee permissions
-	PermEmployeeRead     = "employee.read"
-	PermEmployeeReadSelf = "employee.read_self"
-	PermEmployeeCreate   = "employee.create"
-	PermEmployeeUpdate   = "employee.update"
-	PermEmployeeDelete   = "employee.delete"
+	PermEmployeeRead       = "employee.read"
+	PermEmployeeReadSelf   = "employee.read_self"
+	PermEmployeeUpdateSelf = "employee.update_self"
+	PermEmployeeCreate     = "employee.create"
+	PermEmployeeUpdate     = "employee.update"
+	PermEmployeeDelete     = "employee.delete"
 
 	// Role permissions
 	PermRoleRead             = "role.read"

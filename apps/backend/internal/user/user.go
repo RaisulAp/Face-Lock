@@ -235,6 +235,51 @@ type CreateResult struct {
 	TemporaryPassword string `json:"temporary_password,omitempty"`
 }
 
+// RegisterEmployeeParams is the single-step registration form an admin fills
+// in once. Everything needed for the employee to log in and recognise their
+// own data is captured here; the employee completes the rest (NIP, position,
+// join date, face enrollment) from their own portal.
+type RegisterEmployeeParams struct {
+	FullName string  `json:"full_name" validate:"required,max=150"`
+	Email    string  `json:"email" validate:"required,email"`
+	Phone    *string `json:"phone" validate:"omitempty,max=30"`
+
+	// Department is a free-text label. There is no departments table in the
+	// schema: employees.department is plain text, so the admin simply types
+	// the department name.
+	Department string `json:"department" validate:"omitempty,max=100"`
+
+	// OfficeLocationID points at an office_locations row. This is what drives
+	// the attendance geofence for the employee.
+	OfficeLocationID *uuid.UUID `json:"office_location_id" validate:"omitempty"`
+
+	// JobTitle is optional but usually known by HR at registration time.
+	JobTitle *string `json:"job_title" validate:"omitempty,max=150"`
+
+	// Password is optional. When empty a temporary password is generated and
+	// returned once in the response, and the user must change it on first login.
+	Password           *string `json:"password" validate:"omitempty"`
+	MustChangePassword *bool   `json:"must_change_password" validate:"omitempty"`
+
+	// RoleID is optional; defaults to the employee role.
+	RoleID *uuid.UUID `json:"role_id" validate:"omitempty"`
+}
+
+// RegisterEmployeeResult summarises what the single form created so the UI can
+// show one confirmation screen instead of asking the admin to fill a second form.
+type RegisterEmployeeResult struct {
+	User              *User     `json:"user"`
+	EmployeeID        uuid.UUID `json:"employee_id"`
+	EmployeeName      string    `json:"employee_name"`
+	Email             string    `json:"email"`
+	Department        *string   `json:"department,omitempty"`
+	OfficeLocation    *string   `json:"office_location,omitempty"`
+	TemporaryPassword string    `json:"temporary_password,omitempty"`
+	// ProfileCompletedAt is nil right after registration; the employee fills
+	// their own profile later, which is what flips this to a timestamp.
+	ProfileCompletedAt *time.Time `json:"profile_completed_at,omitempty"`
+}
+
 // Create creates a new user.
 func (s *Service) Create(ctx context.Context, actor *rbac.Principal, p CreateParams) (*CreateResult, error) {
 	// If no role specified, default to employee role
@@ -347,6 +392,188 @@ func (s *Service) Create(ctx context.Context, actor *rbac.Principal, p CreatePar
 		res.TemporaryPassword = plainPassword
 	}
 
+	return res, nil
+}
+
+// RegisterEmployee creates the employee row and their user account in a single
+// transaction. This is the replacement for the old two-step flow where an admin
+// had to create an employee and then separately attach a user account.
+//
+// The employee row is intentionally created with profile_completed_at = NULL:
+// the admin only supplies identity and placement data, while NIP, position and
+// join date are the employee's own responsibility from the portal.
+func (s *Service) RegisterEmployee(ctx context.Context, actor *rbac.Principal, p RegisterEmployeeParams) (*RegisterEmployeeResult, error) {
+	fullName := strings.TrimSpace(p.FullName)
+	if fullName == "" {
+		return nil, httpx.NewAppError(httpx.CodeValidationError, "nama lengkap wajib diisi")
+	}
+
+	email := strings.ToLower(strings.TrimSpace(p.Email))
+	if email == "" || !strings.Contains(email, "@") {
+		return nil, httpx.NewAppError(httpx.CodeValidationError, "email tidak valid")
+	}
+
+	// Resolve role: default to the employee system role.
+	roleIDs := []uuid.UUID{}
+	if p.RoleID != nil {
+		roleIDs = append(roleIDs, *p.RoleID)
+	} else {
+		var empRoleID uuid.UUID
+		if err := s.db.QueryRow(ctx, "SELECT id FROM roles WHERE name = 'employee' AND deleted_at IS NULL").Scan(&empRoleID); err != nil {
+			return nil, fmt.Errorf("looking up employee role: %w", err)
+		}
+		roleIDs = append(roleIDs, empRoleID)
+	}
+
+	// Enforce the "exactly one role" rule that Create() also enforces.
+	if len(roleIDs) != 1 {
+		return nil, httpx.NewAppError(httpx.CodeValidationError, "setiap user wajib memiliki tepat 1 role akses")
+	}
+
+	var isSystem bool
+	if err := s.db.QueryRow(ctx, "SELECT is_system FROM roles WHERE id = $1 AND deleted_at IS NULL", roleIDs[0]).Scan(&isSystem); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, httpx.NewAppError(httpx.CodeNotFound, "role tidak ditemukan")
+		}
+		return nil, fmt.Errorf("checking role: %w", err)
+	}
+	if err := s.rbacSvc.CheckPrivilegeEscalationRoleIDs(ctx, actor, roleIDs); err != nil {
+		return nil, err
+	}
+
+	// Resolve the office location up-front so we can validate the ID and echo a
+	// friendly name back to the admin in the confirmation screen.
+	var departmentName, officeName *string
+	if dept := strings.TrimSpace(p.Department); dept != "" {
+		departmentName = &dept
+	}
+	if p.OfficeLocationID != nil {
+		var name string
+		err := s.db.QueryRow(ctx, "SELECT name FROM office_locations WHERE id = $1 AND deleted_at IS NULL", *p.OfficeLocationID).Scan(&name)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return nil, httpx.NewAppError(httpx.CodeValidationError, "lokasi kantor tidak ditemukan")
+			}
+			return nil, fmt.Errorf("checking office location: %w", err)
+		}
+		officeName = &name
+	}
+
+	// Password handling mirrors Create(): provided password, or generate one.
+	var (
+		plainPassword string
+		mustChange    bool
+	)
+	if p.Password != nil && *p.Password != "" {
+		plainPassword = *p.Password
+		if err := auth.ValidatePassword(plainPassword, 10); err != nil {
+			return nil, httpx.NewAppError(httpx.CodeValidationError, err.Error())
+		}
+		if p.MustChangePassword != nil {
+			mustChange = *p.MustChangePassword
+		}
+	} else {
+		var err error
+		plainPassword, err = auth.GenerateTemporaryPassword()
+		if err != nil {
+			return nil, fmt.Errorf("generating temporary password: %w", err)
+		}
+		mustChange = true
+	}
+
+	hash, err := auth.HashPassword(plainPassword)
+	if err != nil {
+		return nil, fmt.Errorf("hashing password: %w", err)
+	}
+
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("beginning transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	// 1. Employee row. employee_number stays NULL (migration 000025 made it
+	//    optional) because the admin no longer knows it at registration time.
+	const insEmpQ = `
+		INSERT INTO employees (
+			full_name, employee_number, department,
+			position, phone, office_location_id, join_date,
+			employment_status, profile_created_by_admin
+		) VALUES (
+			$1, NULL, $2, $3, $4, $5, NULL, 'active', true
+		)
+		RETURNING id
+	`
+	var employeeID uuid.UUID
+	var departmentText any
+	if departmentName != nil {
+		departmentText = *departmentName
+	}
+	err = tx.QueryRow(ctx, insEmpQ,
+		fullName,           // $1 full_name
+		departmentText,     // $2 department
+		p.JobTitle,         // $3 position
+		p.Phone,            // $4 phone
+		p.OfficeLocationID, // $5 office_location_id
+	).Scan(&employeeID)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" && strings.Contains(pgErr.ConstraintName, "employee_number") {
+			return nil, httpx.NewAppError(httpx.CodeEmployeeNumberTaken, "employee number is already registered")
+		}
+		return nil, fmt.Errorf("inserting employee: %w", err)
+	}
+
+	// 2. User account bound to that employee.
+	const insertQ = `
+		INSERT INTO users (
+			email, employee_id, password_hash, is_active, must_change_password, token_version
+		) VALUES (
+			$1, $2, $3, true, $4, 1
+		)
+		RETURNING id
+	`
+	var newUserID uuid.UUID
+	err = tx.QueryRow(ctx, insertQ, email, employeeID, hash, mustChange).Scan(&newUserID)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			if strings.Contains(pgErr.ConstraintName, "email") {
+				return nil, httpx.NewAppError(httpx.CodeEmailTaken, "email is already registered")
+			}
+			if strings.Contains(pgErr.ConstraintName, "employee_id") {
+				return nil, httpx.NewAppError(httpx.CodeEmployeeAlreadyHasUser, "employee already has a user account")
+			}
+		}
+		return nil, fmt.Errorf("inserting user: %w", err)
+	}
+
+	// 3. Role assignment.
+	const insRoleQ = `INSERT INTO user_roles (user_id, role_id) VALUES ($1, $2)`
+	if _, err := tx.Exec(ctx, insRoleQ, newUserID, roleIDs[0]); err != nil {
+		return nil, fmt.Errorf("assigning role: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("committing registration: %w", err)
+	}
+
+	created, err := s.GetByID(ctx, newUserID)
+	if err != nil {
+		return nil, err
+	}
+
+	res := &RegisterEmployeeResult{
+		User:           created,
+		EmployeeID:     employeeID,
+		EmployeeName:   fullName,
+		Email:          email,
+		Department:     departmentName,
+		OfficeLocation: officeName,
+	}
+	if p.Password == nil || *p.Password == "" {
+		res.TemporaryPassword = plainPassword
+	}
 	return res, nil
 }
 
@@ -691,6 +918,45 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	_ = h.audit.RecordFromRequest(r, "user.create", "user", &resID, map[string]any{
 		"email": res.User.Email,
 		"roles": res.User.Roles,
+	})
+
+	httpx.Created(w, res)
+}
+
+// RegisterEmployee handles POST /api/v1/users/register-employee.
+//
+// This is the single-step registration endpoint: one form creates both the
+// employee record and the login account. The form only captures what the admin
+// actually knows (name, email, phone, department, office, optional position),
+// and the employee finishes their own profile from the portal afterwards.
+func (h *Handler) RegisterEmployee(w http.ResponseWriter, r *http.Request) {
+	var params RegisterEmployeeParams
+	if err := httpx.DecodeAndValidate(r, &params); err != nil {
+		httpx.Fail(r.Context(), w, err)
+		return
+	}
+
+	p, ok := rbac.GetPrincipal(r.Context())
+	if !ok || p == nil {
+		httpx.Fail(r.Context(), w, httpx.NewAppError(httpx.CodeUnauthenticated, "authentication required"))
+		return
+	}
+
+	res, err := h.svc.RegisterEmployee(r.Context(), p, params)
+	if err != nil {
+		if appErr, ok := err.(*httpx.AppError); ok {
+			httpx.Fail(r.Context(), w, appErr)
+			return
+		}
+		httpx.Fail(r.Context(), w, httpx.NewAppError(httpx.CodeInternalError, "failed to register employee"))
+		return
+	}
+
+	resID := res.EmployeeID.String()
+	_ = h.audit.RecordFromRequest(r, "user.register_employee", "employee", &resID, map[string]any{
+		"email":         res.Email,
+		"employee_name": res.EmployeeName,
+		"department":    res.Department,
 	})
 
 	httpx.Created(w, res)

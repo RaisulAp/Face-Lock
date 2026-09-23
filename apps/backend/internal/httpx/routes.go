@@ -32,12 +32,13 @@ var RouteRegistry = map[string]RouteGuard{
 	"POST /api/v1/auth/change-password": GuardAuth,
 
 	// #7 - #12: Employee Endpoints
-	"GET /api/v1/employees":         "employee.read",
-	"POST /api/v1/employees":        "employee.create",
-	"GET /api/v1/employees/me":      "employee.read_self",
-	"GET /api/v1/employees/{id}":    "employee.read|employee.read_self",
-	"PATCH /api/v1/employees/{id}":  "employee.update",
-	"DELETE /api/v1/employees/{id}": "employee.delete",
+	"GET /api/v1/employees":              "employee.read",
+	"POST /api/v1/employees":             "employee.create",
+	"GET /api/v1/employees/me":           "employee.read_self",
+	"PATCH /api/v1/employees/me/profile": "employee.update_self",
+	"GET /api/v1/employees/{id}":         "employee.read|employee.read_self",
+	"PATCH /api/v1/employees/{id}":       "employee.update",
+	"DELETE /api/v1/employees/{id}":      "employee.delete",
 
 	// #13 - #20: User Endpoints
 	"GET /api/v1/users":                      "user.read",
@@ -120,9 +121,10 @@ var RouteRegistry = map[string]RouteGuard{
 	"GET /api/v1/attendances/attempts":      "attendance.read_all",
 
 	// #66 - #70: Office Locations (Fase 4)
-	"GET /api/v1/locations":         "location.read",
-	"POST /api/v1/locations":        "location.create",
-	"GET /api/v1/locations/{id}":    "location.read",
-	"PATCH /api/v1/locations/{id}":  "location.update",
-	"DELETE /api/v1/locations/{id}": "location.delete",
+	"GET /api/v1/office-locations":         "location.read",
+	"POST /api/v1/office-locations":        "location.create",
+	"GET /api/v1/office-locations/{id}":    "location.read",
+	"PATCH /api/v1/office-locations/{id}":  "location.update",
+	"PUT /api/v1/office-locations/{id}":    "location.update",
+	"DELETE /api/v1/office-locations/{id}": "location.delete",
 }

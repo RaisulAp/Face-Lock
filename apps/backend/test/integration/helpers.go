@@ -223,6 +223,7 @@ func SetupTestApp(t *testing.T) *TestApp {
 			EmployeeList:          empHandler.List,
 			EmployeeCreate:        empHandler.Create,
 			EmployeeGetMe:         empHandler.GetMe,
+			EmployeeCompleteOwn:   empHandler.CompleteOwnProfile,
 			EmployeeGetByID:       empHandler.GetByID,
 			EmployeeUpdate:        empHandler.Update,
 			EmployeeDelete:        empHandler.Delete,
