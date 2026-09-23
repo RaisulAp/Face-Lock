@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../../lib/api";
 import { useAuth } from "../../../lib/auth/useAuth";
@@ -14,6 +15,7 @@ import { Users, UserPlus, Search, Edit2, ScanFace } from "lucide-react";
 
 export function EmployeesPage() {
   const { can } = useAuth();
+  const { t } = useTranslation(["employee", "common"]);
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(20);
   const [search, setSearch] = useState("");
@@ -101,10 +103,10 @@ export function EmployeesPage() {
         <div>
           <div className="flex items-center gap-2">
             <Users className="w-5 h-5 text-indigo-600" />
-            <h1 className="text-xl font-bold text-gray-900">Manajemen Karyawan</h1>
+            <h1 className="text-xl font-bold text-gray-900">{t("page.title", { ns: "employee" })}</h1>
           </div>
           <p className="text-xs text-gray-500 mt-0.5">
-            Daftar profil karyawan, data identitas, dan status pendaftaran wajah.
+            {t("page.subtitle", { ns: "employee" })}
           </p>
         </div>
 
@@ -112,7 +114,7 @@ export function EmployeesPage() {
           <Link to="/employees/new">
             <Button variant="primary" size="sm">
               <UserPlus className="w-4 h-4 mr-1.5" />
-              Tambah Karyawan
+              {t("page.createEmployee", { ns: "employee" })}
             </Button>
           </Link>
         )}

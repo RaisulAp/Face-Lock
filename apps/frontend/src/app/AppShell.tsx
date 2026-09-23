@@ -7,6 +7,8 @@ import { Menu, X, LogOut, User, KeyRound, Shield, ChevronDown, Clock } from "luc
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import type { SuccessEnvelope } from "../types/api";
+import { useTranslation } from "react-i18next";
+import { LanguageSwitcher } from "../components/ui/LanguageSwitcher";
 
 export function AppShell() {
     const { user, logout, can } = useAuth();
@@ -14,6 +16,7 @@ export function AppShell() {
     const navigate = useNavigate();
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+    const { t } = useTranslation(["common", "nav"]);
 
     // Poll pending count every 30s if user has attendance.approve or attendance.review
     const hasApprovePermission = can(["attendance.approve", "attendance.review"]);
@@ -57,7 +60,7 @@ export function AppShell() {
                         <div>
                             <span className="font-bold text-white text-sm tracking-tight block">FaceClock</span>
                             <span className="text-[10px] text-slate-400 font-medium tracking-wide uppercase block -mt-1">
-                                Admin Panel
+                                {t("adminPanel", { ns: "common" })}
                             </span>
                         </div>
                     </Link>
@@ -80,7 +83,7 @@ export function AppShell() {
                         return (
                             <div key={group.title} className="space-y-1">
                                 <p className="px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-300">
-                                    {group.title}
+                                    {t(group.titleKey, { ns: "nav" })}
                                 </p>
                                 {visibleItems.map((item) => {
                                     const Icon = item.icon;
@@ -108,7 +111,7 @@ export function AppShell() {
                                         >
                                             <div className="flex items-center gap-2.5">
                                                 <Icon className={`w-4 h-4 ${isActive ? "text-white" : "text-slate-400"}`} />
-                                                <span>{item.label}</span>
+                                                <span>{t(item.labelKey, { ns: "nav" })}</span>
                                             </div>
                                             {showBadge && (
                                                 <span className="px-1.5 py-0.5 text-[10px] font-bold bg-amber-500 text-slate-950 rounded-full">
@@ -162,10 +165,13 @@ export function AppShell() {
                         >
                             <Menu className="w-5 h-5" />
                         </button>
-                        <span className="text-xs font-semibold text-gray-500 hidden sm:inline">FaceClock System</span>
+                        <span className="text-xs font-semibold text-gray-500 hidden sm:inline">{t("nav.system", { ns: "common" })}</span>
                     </div>
 
                     <div className="flex items-center gap-4">
+                        {/* Language Switcher */}
+                        <LanguageSwitcher />
+
                         {/* Environment Badge */}
                         <span
                             className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full border ${isDev
@@ -173,7 +179,7 @@ export function AppShell() {
                                 : "bg-emerald-50 text-emerald-700 border-emerald-300"
                                 }`}
                         >
-                            {isDev ? "Development" : "Production"}
+                            {isDev ? t("environment.development", { ns: "common" }) : t("environment.production", { ns: "common" })}
                         </span>
 
                         {/* Profile Menu */}
@@ -207,7 +213,7 @@ export function AppShell() {
                                             className="flex items-center gap-2 px-3.5 py-2 hover:bg-gray-50 text-gray-700"
                                         >
                                             <KeyRound className="w-3.5 h-3.5 text-gray-400" />
-                                            <span>Ganti Password & Sesi</span>
+                                            <span>{t("nav.changePassword", { ns: "common" })}</span>
                                         </Link>
 
                                         <Link
@@ -216,7 +222,7 @@ export function AppShell() {
                                             className="flex items-center gap-2 px-3.5 py-2 hover:bg-indigo-50 text-indigo-700 font-medium"
                                         >
                                             <Clock className="w-3.5 h-3.5 text-indigo-600" />
-                                            <span>Portal Absensi Karyawan</span>
+                                            <span>{t("nav.employeePortal", { ns: "common" })}</span>
                                         </Link>
 
                                         {can("audit.read") && (
@@ -226,7 +232,7 @@ export function AppShell() {
                                                 className="flex items-center gap-2 px-3.5 py-2 hover:bg-gray-50 text-gray-700"
                                             >
                                                 <Shield className="w-3.5 h-3.5 text-gray-400" />
-                                                <span>Audit Log Aktivitas</span>
+                                                <span>{t("nav.auditLog", { ns: "common" })}</span>
                                             </Link>
                                         )}
 
@@ -241,7 +247,7 @@ export function AppShell() {
                                             className="w-full flex items-center gap-2 px-3.5 py-2 text-rose-600 hover:bg-rose-50 text-left font-medium cursor-pointer"
                                         >
                                             <LogOut className="w-3.5 h-3.5" />
-                                            <span>Keluar (Logout)</span>
+                                            <span>{t("nav.logout", { ns: "common" })}</span>
                                         </button>
                                     </div>
                                 </>

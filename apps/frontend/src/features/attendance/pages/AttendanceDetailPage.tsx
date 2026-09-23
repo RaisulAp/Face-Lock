@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../../lib/api";
 import type { Attendance } from "../../../types/api";
@@ -16,6 +17,7 @@ import { ReviewDrawer } from "../components/ReviewDrawer";
 import { ArrowLeft, CheckSquare, Clock, MapPin, Shield } from "lucide-react";
 
 export function AttendanceDetailPage() {
+  const { t } = useTranslation(["attendance", "common"]);
   const { id } = useParams<{ id: string }>();
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
@@ -57,12 +59,12 @@ export function AttendanceDetailPage() {
         <div className="flex items-center gap-3">
           <Link to="/attendances">
             <Button variant="outline" size="sm">
-              <ArrowLeft className="w-4 h-4 mr-1" /> Kembali
+              <ArrowLeft className="w-4 h-4 mr-1" /> {t("actions.back", { ns: "common" })}
             </Button>
           </Link>
           <div>
             <h1 className="text-lg font-bold text-gray-900">
-              Detail Absensi: {attendance.employee_name || "Karyawan"}
+              {t("detail.title", { ns: "attendance" })}: {attendance.employee_name || "Karyawan"}
             </h1>
             <p className="text-[11px] text-gray-400 font-mono">ID: {attendance.id}</p>
           </div>

@@ -98,15 +98,19 @@ var SystemPermissions = []PermissionDef{
 	{PermFaceReindex, "Menjalankan job regenerasi embedding saat model berganti"},
 
 	{PermAttendanceCheckin, "Melakukan check-in/out untuk diri sendiri"},
+	{PermAttendanceCreate, "Melakukan check-in/out untuk diri sendiri"},
 	{PermAttendanceReadSelf, "Lihat riwayat absensi sendiri"},
 	{PermAttendanceReadAll, "Lihat absensi semua karyawan"},
+	{PermAttendanceReadTeam, "Lihat absensi anggota departemen/tim"},
 	{PermAttendanceApprove, "Approve/reject absensi pending_review"},
+	{PermAttendanceReview, "Approve/reject absensi pending_review"},
 	{PermAttendanceExport, "Export rekap"},
 
 	{PermLocationRead, "Kelola office_locations"},
 	{PermLocationCreate, "Kelola office_locations"},
 	{PermLocationUpdate, "Kelola office_locations"},
 	{PermLocationDelete, "Kelola office_locations"},
+	{PermLocationManage, "Buat, ubah, hapus lokasi kantor"},
 }
 
 // AllPermissions returns the slice of all 34 valid permission names.

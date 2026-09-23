@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../../lib/api";
 import { useToast } from "../../../components/ui/Toast";
@@ -11,6 +12,7 @@ import { Select } from "../../../components/ui/Select";
 import { ArrowLeft, UserPlus, Save } from "lucide-react";
 
 export function EmployeeFormPage() {
+  const { t } = useTranslation(["employee", "common"]);
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const toast = useToast();
@@ -108,15 +110,15 @@ export function EmployeeFormPage() {
       <div className="flex items-center gap-3">
         <Link to="/employees">
           <Button variant="outline" size="sm">
-            <ArrowLeft className="w-4 h-4 mr-1" /> Kembali
+            <ArrowLeft className="w-4 h-4 mr-1" /> {t("actions.back", { ns: "common" })}
           </Button>
         </Link>
         <div>
           <h1 className="text-xl font-bold text-gray-900">
-            {isEdit ? "Edit Data Karyawan" : "Pendaftaran Karyawan Baru"}
+            {isEdit ? t("form.editTitle", { ns: "employee" }) : t("form.createTitle", { ns: "employee" })}
           </h1>
           <p className="text-xs text-gray-500 mt-0.5">
-            Lengkapi data profil identitas dan penempatan kantor karyawan.
+            {t("form.personalInfo", { ns: "employee" })}
           </p>
         </div>
       </div>

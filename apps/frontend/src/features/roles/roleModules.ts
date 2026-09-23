@@ -49,8 +49,23 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
                 description: "Melihat data kehadiran dan status absensi semua karyawan perusahaan",
             },
             {
+                name: "attendance.read_team",
+                label: "Lihat Absensi Tim / Departemen",
+                description: "Melihat data kehadiran anggota departemen atau tim kerja",
+            },
+            {
+                name: "attendance.create",
+                label: "Tambah Catatan Presensi",
+                description: "Menambahkan catatan presensi manual untuk karyawan",
+            },
+            {
+                name: "attendance.review",
+                label: "Tinjau Antrean Review Presensi",
+                description: "Meninjau foto kehadiran atau geofence yang memerlukan verifikasi",
+            },
+            {
                 name: "attendance.approve",
-                label: "Verifikasi Antrian Review",
+                label: "Verifikasi & Persetujuan Absensi",
                 description: "Menyetujui (Approve) atau menolak (Reject) absensi dengan status pending review",
             },
             {
@@ -174,6 +189,11 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
                 name: "location.delete",
                 label: "Hapus Lokasi Kantor",
                 description: "Menghapus lokasi kantor dari daftar geofence presensi",
+            },
+            {
+                name: "location.manage",
+                label: "Kelola Master Geofence",
+                description: "Pengaturan kebijakan dan perimeter area geofence tingkat lanjut",
             },
         ],
     },
@@ -320,6 +340,7 @@ export function groupPermissionsByDefinedModules(allPerms: Permission[]): Groupe
     allPerms.forEach((p) => permMap.set(p.name, p));
 
     const result: GroupedModulePermissions[] = [];
+    const processedNames = new Set<string>();
 
     MODULE_DEFINITIONS.forEach((mod) => {
         const modPerms: (Permission & { friendlyLabel?: string; friendlyDesc?: string })[] = [];
@@ -327,10 +348,23 @@ export function groupPermissionsByDefinedModules(allPerms: Permission[]): Groupe
         mod.permissions.forEach((def) => {
             const found = permMap.get(def.name);
             if (found) {
+                processedNames.add(def.name);
                 modPerms.push({
                     ...found,
                     friendlyLabel: def.label,
                     friendlyDesc: def.description || found.description,
+                });
+            }
+        });
+
+        // Also check if any permissions have module_code matching this module key
+        allPerms.forEach((p) => {
+            if (!processedNames.has(p.name) && p.module_code === mod.key) {
+                processedNames.add(p.name);
+                modPerms.push({
+                    ...p,
+                    friendlyLabel: p.name,
+                    friendlyDesc: p.description,
                 });
             }
         });
@@ -344,10 +378,7 @@ export function groupPermissionsByDefinedModules(allPerms: Permission[]): Groupe
     });
 
     // Handle any orphan permissions not in predefined list
-    const knownNames = new Set(
-        MODULE_DEFINITIONS.flatMap((m) => m.permissions.map((p) => p.name))
-    );
-    const orphans = allPerms.filter((p) => !knownNames.has(p.name));
+    const orphans = allPerms.filter((p) => !processedNames.has(p.name));
 
     if (orphans.length > 0) {
         result.push({
@@ -439,3 +470,367 @@ export const ROLE_PRESETS: PresetTemplate[] = [
             p.endsWith(".read_self"),
     },
 ];
+
+// =========================================================================
+// MATRIX GRID TYPES & CATALOG DEFINITIONS
+// =========================================================================
+
+export type ActionColumnKey =
+    | "create"
+    | "read"
+    | "update"
+    | "delete"
+    | "export";
+
+export interface MatrixActionColumn {
+    key: ActionColumnKey;
+    label: string;
+    shortLabel: string;
+    description: string;
+}
+
+export const MATRIX_ACTION_COLUMNS: MatrixActionColumn[] = [
+    {
+        key: "create",
+        label: "Tambah / Create",
+        shortLabel: "Create",
+        description: "Pencatatan data baru, registrasi akun, enroll wajah, atau check-in",
+    },
+    {
+        key: "read",
+        label: "Lihat / Read",
+        shortLabel: "Read",
+        description: "Melihat daftar umum, riwayat kehadiran pribadi/tim, profil, atau direktori",
+    },
+    {
+        key: "update",
+        label: "Ubah / Update",
+        shortLabel: "Update",
+        description: "Memperbarui informasi data, review/approval presensi, parameter, atau konfigurasi",
+    },
+    {
+        key: "delete",
+        label: "Hapus / Delete",
+        shortLabel: "Delete",
+        description: "Menghapus, soft-delete, atau menonaktifkan entitas data",
+    },
+    {
+        key: "export",
+        label: "Ekspor / Import",
+        shortLabel: "Ekspor/Import",
+        description: "Mengunduh rekapitulasi laporan atau transfer data spreadsheet",
+    },
+];
+
+export interface MatrixSubFeature {
+    id: string;
+    name: string;
+    description: string;
+    permissionsByAction: Partial<Record<ActionColumnKey, string>>;
+}
+
+export interface MatrixModuleGroup {
+    code: string;
+    name: string;
+    description: string;
+    icon: string;
+    subFeatures: MatrixSubFeature[];
+}
+
+export const MATRIX_MODULE_GROUPS: MatrixModuleGroup[] = [
+    {
+        code: "attendance",
+        name: "Presensi & Absensi",
+        description: "Pencatatan kehadiran mandiri, monitoring tim, verifikasi review, dan rekapitulasi.",
+        icon: "Clock",
+        subFeatures: [
+            {
+                id: "attendance_self",
+                name: "Presensi Mandiri (Pegawai)",
+                description: "Akses check-in/out mandiri dan melihat histori kehadiran pribadi",
+                permissionsByAction: {
+                    create: "attendance.checkin",
+                    read: "attendance.read_self",
+                },
+            },
+            {
+                id: "attendance_team",
+                name: "Data Presensi Tim & Departemen",
+                description: "Monitoring kehadiran bawahan atau anggota unit kerja tim",
+                permissionsByAction: {
+                    read: "attendance.read_team",
+                },
+            },
+            {
+                id: "attendance_all",
+                name: "Data Presensi Seluruh Karyawan",
+                description: "Monitoring absensi seluruh staf perusahaan dan pencatatan presensi manual",
+                permissionsByAction: {
+                    create: "attendance.create",
+                    read: "attendance.read_all",
+                },
+            },
+            {
+                id: "attendance_review",
+                name: "Tinjauan Antrean Review Presensi",
+                description: "Pemeriksaan foto dan geofence presensi yang memerlukan validasi",
+                permissionsByAction: {
+                    update: "attendance.review",
+                },
+            },
+            {
+                id: "attendance_approval",
+                name: "Persetujuan Akhir Presensi (Approval)",
+                description: "Menyetujui (Approve) atau menolak (Reject) absensi berstatus pending review",
+                permissionsByAction: {
+                    update: "attendance.approve",
+                },
+            },
+            {
+                id: "attendance_export",
+                name: "Laporan & Rekapitulasi Presensi",
+                description: "Ekspor rekapitulasi jam kerja, keterlambatan, dan log kehadiran ke spreadsheet",
+                permissionsByAction: {
+                    export: "attendance.export",
+                },
+            },
+        ],
+    },
+    {
+        code: "employee",
+        name: "Karyawan & Pegawai",
+        description: "Manajemen data induk karyawan, NIK, penempatan divisi, dan profil mandiri.",
+        icon: "Users",
+        subFeatures: [
+            {
+                id: "employee_self",
+                name: "Profil Karyawan Mandiri",
+                description: "Melihat data identitas, jabatan, dan informasi kepegawaian diri sendiri",
+                permissionsByAction: {
+                    read: "employee.read_self",
+                },
+            },
+            {
+                id: "employee_master",
+                name: "Data Induk Seluruh Karyawan",
+                description: "Pencatatan karyawan baru, lihat katalog, perbarui data, dan penonaktifan",
+                permissionsByAction: {
+                    create: "employee.create",
+                    read: "employee.read",
+                    update: "employee.update",
+                    delete: "employee.delete",
+                },
+            },
+        ],
+    },
+    {
+        code: "face",
+        name: "Biometrik Wajah (AI)",
+        description: "Pendaftaran foto referensi biometrik wajah, inspeksi galeri, dan regenerasi embedding.",
+        icon: "ScanFace",
+        subFeatures: [
+            {
+                id: "face_self",
+                name: "Biometrik Wajah Mandiri",
+                description: "Pengambilan foto referensi wajah diri dan inspeksi status biometrik pribadi",
+                permissionsByAction: {
+                    create: "face.enroll_self",
+                    read: "face.read_self",
+                },
+            },
+            {
+                id: "face_master",
+                name: "Galeri & Referensi Wajah Karyawan",
+                description: "Pendaftaran foto oleh operator, galeri foto semua pegawai, dan penghapusan foto",
+                permissionsByAction: {
+                    create: "face.enroll_any",
+                    read: "face.read_any",
+                    delete: "face.delete_any",
+                },
+            },
+            {
+                id: "face_ai_engine",
+                name: "AI Biometric Engine & Reindex",
+                description: "Pembaruan dan regenerasi batch vektor embedding 512-dimensi saat upgrade model AI",
+                permissionsByAction: {
+                    update: "face.reindex",
+                },
+            },
+        ],
+    },
+    {
+        code: "location",
+        name: "Lokasi Kantor & Geofence",
+        description: "Master titik koordinat GPS kantor, radius toleransi presensi, dan kebijakan geofence.",
+        icon: "MapPin",
+        subFeatures: [
+            {
+                id: "location_points",
+                name: "Titik Lokasi Kantor & Radius",
+                description: "Daftar kantor, koordinat GPS lintang-bujur, radius toleransi jarak, dan CRUD lokasi",
+                permissionsByAction: {
+                    create: "location.create",
+                    read: "location.read",
+                    update: "location.update",
+                    delete: "location.delete",
+                },
+            },
+            {
+                id: "location_geofence_policy",
+                name: "Manajemen Kebijakan Geofence",
+                description: "Pengaturan dan pembaruan kebijakan perimeter area geofence presensi",
+                permissionsByAction: {
+                    update: "location.manage",
+                },
+            },
+        ],
+    },
+    {
+        code: "user",
+        name: "Pengguna Sistem & Akun",
+        description: "Registrasi akun pengguna, aktivasi/blokir, penetapan peran, dan reset sandi.",
+        icon: "UserCheck",
+        subFeatures: [
+            {
+                id: "user_accounts",
+                name: "Akun Pengguna Sistem",
+                description: "Registrasi akun pengguna, perbarui email, aktivasi/nonaktifkan akun, dan soft-delete",
+                permissionsByAction: {
+                    create: "user.create",
+                    read: "user.read",
+                    update: "user.update",
+                    delete: "user.delete",
+                },
+            },
+            {
+                id: "user_role_assignment",
+                name: "Penetapan Peran (Role Assignment)",
+                description: "Menetapkan atau memindahkan tingkatan peran akses (roles) pada akun pengguna",
+                permissionsByAction: {
+                    update: "user.assign_role",
+                },
+            },
+            {
+                id: "user_password_reset",
+                name: "Pemulihan & Reset Kata Sandi",
+                description: "Mereset kata sandi pengguna lain atau membuatkan kata sandi sementara",
+                permissionsByAction: {
+                    update: "user.reset_password",
+                },
+            },
+        ],
+    },
+    {
+        code: "role",
+        name: "Peran & Hak Akses (RBAC)",
+        description: "Manajemen kelompok peran pengguna, wewenang akses, dan direktori izin sistem.",
+        icon: "Shield",
+        subFeatures: [
+            {
+                id: "role_groups",
+                name: "Kelompok Peran (Roles & RBAC)",
+                description: "Manajemen peran akses sistem, pembuatan peran baru, ubah nama, dan hapus",
+                permissionsByAction: {
+                    create: "role.create",
+                    read: "role.read",
+                    update: "role.update",
+                    delete: "role.delete",
+                },
+            },
+            {
+                id: "role_perm_assignment",
+                name: "Penugasan Matriks Izin Peran",
+                description: "Memperbarui penetapan izin (permission mapping) pada kelompok peran",
+                permissionsByAction: {
+                    update: "role.assign_permission",
+                },
+            },
+            {
+                id: "role_perm_catalog",
+                name: "Katalog Referensi Izin Sistem",
+                description: "Melihat direktori wewenang hak akses (permission dictionary) sistem",
+                permissionsByAction: {
+                    read: "permission.read",
+                },
+            },
+        ],
+    },
+    {
+        code: "settings",
+        name: "Pengaturan Sistem",
+        description: "Pengaturan parameter ambang toleransi AI, durasi sesi, dan preferensi aplikasi.",
+        icon: "Sliders",
+        subFeatures: [
+            {
+                id: "settings_config",
+                name: "Konfigurasi & Parameter Aplikasi",
+                description: "Pengaturan toleransi ambang wajah, durasi sesi, dan parameter sistem",
+                permissionsByAction: {
+                    read: "settings.read",
+                    update: "settings.update",
+                },
+            },
+        ],
+    },
+    {
+        code: "audit",
+        name: "Jejak Audit & Keamanan",
+        description: "Catatan riwayat aktivitas operasional penting, log autentikasi, dan audit kepatuhan.",
+        icon: "FileText",
+        subFeatures: [
+            {
+                id: "audit_trail",
+                name: "Jejak Audit Log & Keamanan",
+                description: "Catatan riwayat transaksi sensitif, log autentikasi, dan audit kepatuhan sistem",
+                permissionsByAction: {
+                    read: "audit.read",
+                },
+            },
+        ],
+    },
+];
+
+export interface MatrixCellInfo {
+    actionKey: ActionColumnKey;
+    actionLabel: string;
+    permissionName?: string;
+    label?: string;
+    description?: string;
+    isGranted: boolean;
+    exists: boolean;
+}
+
+export function getMatrixCellsForSubFeature(
+    subFeature: MatrixSubFeature,
+    allPermissions: Permission[],
+    assignedPermNames: Set<string>
+): MatrixCellInfo[] {
+    const permMap = new Map<string, Permission>();
+    allPermissions.forEach((p) => permMap.set(p.name, p));
+
+    return MATRIX_ACTION_COLUMNS.map((col) => {
+        const permName = subFeature.permissionsByAction[col.key];
+        if (!permName) {
+            return {
+                actionKey: col.key,
+                actionLabel: col.shortLabel,
+                exists: false,
+                isGranted: false,
+            };
+        }
+
+        const perm = permMap.get(permName);
+        const isGranted = assignedPermNames.has(permName);
+
+        return {
+            actionKey: col.key,
+            actionLabel: col.shortLabel,
+            permissionName: permName,
+            label: perm?.description || permName,
+            description: perm?.description,
+            isGranted,
+            exists: true,
+        };
+    });
+}
+

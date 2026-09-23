@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../../lib/api";
 import { useAuth } from "../../../lib/auth/useAuth";
@@ -40,6 +41,7 @@ import { UserDetailModal } from "../components/UserDetailModal";
 
 export function UsersPage() {
   const { user: currentUser, can } = useAuth();
+  const { t } = useTranslation(["user", "common"]);
   const isSuperAdmin =
     currentUser?.roles?.some((r: any) =>
       typeof r === "string" ? r === "super_admin" : r?.name === "super_admin",
@@ -308,9 +310,9 @@ export function UsersPage() {
               <UsersIcon className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-900">Manajemen Pengguna Sistem</h1>
+              <h1 className="text-xl font-bold text-gray-900">{t("page.title", { ns: "user" })}</h1>
               <p className="text-xs text-gray-500 mt-0.5">
-                Kelola akun autentikasi login, keterkaitan karyawan, dan penugasan peran akses FaceClock.
+                {t("page.subtitle", { ns: "user" })}
               </p>
             </div>
           </div>
@@ -324,7 +326,7 @@ export function UsersPage() {
             className="text-xs text-gray-700"
           >
             <HelpCircle className="w-3.5 h-3.5 mr-1 text-indigo-600" />
-            {showGuide ? "Tutup Panduan" : "Panduan Pengguna"}
+            {showGuide ? t("onboarding.hideGuide", { ns: "user" }) : t("onboarding.showGuide", { ns: "user" })}
           </Button>
 
           {can("user.create") && (
@@ -335,7 +337,7 @@ export function UsersPage() {
               className="text-xs shadow-xs"
             >
               <UserPlus className="w-4 h-4 mr-1.5" />
-              Tambah Pengguna
+              {t("page.createUser", { ns: "user" })}
             </Button>
           )}
         </div>

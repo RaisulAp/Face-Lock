@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../../lib/api";
 import { useAuth } from "../../../lib/auth/useAuth";
@@ -13,6 +14,7 @@ import { ConfirmDialog } from "../../../components/feedback/ConfirmDialog";
 import { ArrowLeft, ScanFace, Trash2, ShieldCheck, ShieldAlert, Sparkles } from "lucide-react";
 
 export function EmployeeFacePage() {
+  const { t } = useTranslation(["employee", "common"]);
   const { id } = useParams<{ id: string }>();
   const { can } = useAuth();
   const toast = useToast();
@@ -68,13 +70,13 @@ export function EmployeeFacePage() {
       <div className="flex items-center gap-3">
         <Link to="/employees">
           <Button variant="outline" size="sm">
-            <ArrowLeft className="w-4 h-4 mr-1" /> Kembali ke Karyawan
+            <ArrowLeft className="w-4 h-4 mr-1" /> {t("actions.back", { ns: "common" })}
           </Button>
         </Link>
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Biometrik Wajah: {employee?.name || "Karyawan"}</h1>
+          <h1 className="text-xl font-bold text-gray-900">{t("face.title", { ns: "employee" })}: {employee?.name || "Karyawan"}</h1>
           <p className="text-xs text-gray-500 mt-0.5">
-            Kelola template embedding wajah dan foto referensi absensi.
+            {t("face.subtitle", { ns: "employee" })}
           </p>
         </div>
       </div>

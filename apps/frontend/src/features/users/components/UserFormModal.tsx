@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import {
     Users,
@@ -36,6 +37,7 @@ export function UserFormModal({
     onSuccessCreate,
     onSuccessUpdate,
 }: UserFormModalProps) {
+    const { t } = useTranslation(["user", "common"]);
     const isEdit = Boolean(userToEdit);
 
     // Form states
@@ -198,7 +200,7 @@ export function UserFormModal({
         <Modal
             open={open}
             onClose={onClose}
-            title={isEdit ? "Edit Akun Pengguna" : "Tambah Pengguna Baru"}
+            title={isEdit ? t("form.editTitle", { ns: "user" }) : t("form.createTitle", { ns: "user" })}
             description={
                 isEdit
                     ? "Perbarui email atau relasi karyawan untuk akun ini."

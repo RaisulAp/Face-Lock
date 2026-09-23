@@ -7,7 +7,7 @@ export interface ModalProps {
   title: string;
   description?: string;
   children: React.ReactNode;
-  maxWidth?: "sm" | "md" | "lg" | "xl" | "2xl" | "3xl" | "4xl";
+  maxWidth?: "sm" | "md" | "lg" | "xl" | "2xl" | "3xl" | "4xl" | "5xl" | "6xl";
 }
 
 export function Modal({ open, onClose, title, description, children, maxWidth = "md" }: ModalProps) {

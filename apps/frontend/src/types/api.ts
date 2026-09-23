@@ -286,13 +286,39 @@ export interface UserItem {
   roles: { id: string; name: string; is_system?: boolean }[];
 }
 
+export interface RoleModuleSummary {
+  id: string;
+  code: string;
+  name: string;
+  description?: string;
+  icon?: string;
+  sort_order: number;
+  active_permissions: number;
+  total_permissions: number;
+}
+
+export interface ModuleItem {
+  id: string;
+  code: string;
+  name: string;
+  description?: string;
+  icon?: string;
+  sort_order: number;
+  created_at?: string;
+  updated_at?: string;
+  permissions?: PermissionItem[];
+}
+
 export interface RoleItem {
   id: string;
   name: string;
   description?: string | null;
   is_system: boolean;
   created_at: string;
-  permissions?: { id: string; name: string; resource: string; action: string; description?: string }[];
+  permissions?: PermissionItem[];
+  modules?: RoleModuleSummary[];
+  module_count?: number;
+  total_modules?: number;
 }
 
 export interface PermissionItem {
@@ -301,6 +327,9 @@ export interface PermissionItem {
   resource: string;
   action: string;
   description?: string;
+  module_id?: string;
+  module_code?: string;
+  module_name?: string;
 }
 
 export interface GroupedPermissionsResponse {
@@ -376,6 +405,7 @@ export type Role = RoleItem & {
   permission_count?: number;
 };
 export type Permission = PermissionItem;
+export type Module = ModuleItem;
 export type User = Omit<UserItem, "roles"> & {
   employee_name?: string | null;
   failed_login_count?: number;

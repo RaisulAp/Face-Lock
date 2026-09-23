@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Copy, Check, Eye, EyeOff, ShieldCheck, AlertCircle } from "lucide-react";
 import { Modal } from "../../../components/ui/Modal";
 import { Button } from "../../../components/ui/Button";
@@ -18,6 +19,7 @@ export function UserCredentialsModal({
     temporaryPassword,
     actionTitle = "Akun Pengguna Berhasil Disimpan",
 }: UserCredentialsModalProps) {
+    const { t } = useTranslation(["user", "common"]);
     const [showPassword, setShowPassword] = useState(true);
     const [copiedAll, setCopiedAll] = useState(false);
     const [copiedPwd, setCopiedPwd] = useState(false);
@@ -43,8 +45,8 @@ export function UserCredentialsModal({
         <Modal
             open={open}
             onClose={onClose}
-            title={actionTitle}
-            description="Simpan atau kirimkan informasi kredensial login ini kepada pengguna bersangkutan."
+            title={actionTitle || t("credentials.title", { ns: "user" })}
+            description={t("credentials.subtitle", { ns: "user" })}
             maxWidth="md"
         >
             <div className="space-y-4">

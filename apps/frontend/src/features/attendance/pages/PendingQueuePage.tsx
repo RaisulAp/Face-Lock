@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../../lib/api";
 import type { Attendance, SuccessEnvelope } from "../../../types/api";
@@ -13,6 +14,7 @@ import { Button } from "../../../components/ui/Button";
 import { CheckSquare, RefreshCw } from "lucide-react";
 
 export function PendingQueuePage() {
+  const { t } = useTranslation(["attendance", "common"]);
   const [selectedAttendance, setSelectedAttendance] = useState<Attendance | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
@@ -93,16 +95,16 @@ export function PendingQueuePage() {
         <div>
           <div className="flex items-center gap-2">
             <CheckSquare className="w-5 h-5 text-indigo-600" />
-            <h1 className="text-xl font-bold text-gray-900">Antrian Review Kehadiran</h1>
+            <h1 className="text-xl font-bold text-gray-900">{t("pending.title", { ns: "attendance" })}</h1>
           </div>
           <p className="text-xs text-gray-500 mt-0.5">
-            Daftar absensi yang tertahan untuk verifikasi manual supervisor (anomali kemiripan atau geofence).
+            {t("pending.subtitle", { ns: "attendance" })}
           </p>
         </div>
 
         <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
           <RefreshCw className={`w-3.5 h-3.5 mr-1 ${isFetching ? "animate-spin" : ""}`} />
-          Segarkan
+          {t("actions.refresh", { ns: "common" })}
         </Button>
       </div>
 
@@ -112,8 +114,8 @@ export function PendingQueuePage() {
         data={attendances}
         keyExtractor={(item) => item.id}
         isLoading={isLoading}
-        emptyTitle="Antrian Bersih"
-        emptyDescription="Tidak ada permohonan kehadiran yang menunggu tinjauan manual saat ini."
+        emptyTitle={t("pending.noData", { ns: "attendance" })}
+        emptyDescription={t("pending.noData", { ns: "attendance" })}
       />
 
       {/* Review Drawer / Modal */}

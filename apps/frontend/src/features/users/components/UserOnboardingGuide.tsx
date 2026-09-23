@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Users, Shield, KeyRound, Sparkles, X, ChevronDown, ChevronUp, Info, ArrowRight } from "lucide-react";
 import { Button } from "../../../components/ui/Button";
 
@@ -8,6 +9,7 @@ interface UserOnboardingGuideProps {
 }
 
 export function UserOnboardingGuide({ onOpenCreateModal, canCreateUser = true }: UserOnboardingGuideProps) {
+    const { t } = useTranslation(["user", "common"]);
     const [isDismissed, setIsDismissed] = useState<boolean>(() => {
         return localStorage.getItem("fc_users_guide_dismissed") === "true";
     });
@@ -32,7 +34,7 @@ export function UserOnboardingGuide({ onOpenCreateModal, canCreateUser = true }:
                     className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-800 bg-indigo-50/80 px-3 py-1.5 rounded-lg border border-indigo-100 transition"
                 >
                     <Info className="w-3.5 h-3.5" />
-                    Pelajari Perbedaan Karyawan vs Akun Pengguna
+                    {t("onboarding.showGuide", { ns: "user" })}
                 </button>
             </div>
         );
@@ -52,7 +54,7 @@ export function UserOnboardingGuide({ onOpenCreateModal, canCreateUser = true }:
                         </div>
                         <div>
                             <h2 className="font-bold text-base sm:text-lg text-white">
-                                Panduan Memulai: Pengguna & Hak Akses
+                                {t("onboarding.title", { ns: "user" })}
                             </h2>
                             <p className="text-xs text-indigo-200 mt-0.5">
                                 Baru pertama kali menggunakan FaceClock? Pahami konsep akun agar pengaturan akses berjalan tepat.

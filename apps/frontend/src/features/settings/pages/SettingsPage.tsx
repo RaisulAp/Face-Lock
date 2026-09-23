@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../../lib/api";
 import { useToast } from "../../../components/ui/Toast";
@@ -24,6 +25,7 @@ import {
 
 export function SettingsPage() {
   const toast = useToast();
+  const { t } = useTranslation(["settings", "common"]);
 
   // 1. Fetch all settings (Endpoint #28)
   const {
@@ -181,10 +183,10 @@ export function SettingsPage() {
       <div>
         <div className="flex items-center gap-2">
           <Sliders className="w-5 h-5 text-indigo-600" />
-          <h1 className="text-xl font-bold text-gray-900">Pengaturan Sistem & Kebijakan</h1>
+          <h1 className="text-xl font-bold text-gray-900">{t("page.title", { ns: "settings" })}</h1>
         </div>
         <p className="text-xs text-gray-500 mt-0.5">
-          Kelola parameter biometrik wajah, kebijakan geofence, jadwal kerja, dan retensi data.
+          {t("page.subtitle", { ns: "settings" })}
         </p>
       </div>
 

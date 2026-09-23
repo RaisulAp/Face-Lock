@@ -1,0 +1,55 @@
+import type { LocationTranslations } from "../id/location";
+
+export const location = {
+    page: {
+        title: "Office Locations",
+        subtitle: "Manage allowed locations for attendance check-in.",
+        createLocation: "Add Location",
+        searchPlaceholder: "Search location name...",
+        noData: "No locations found.",
+        loading: "Loading locations...",
+    },
+    table: {
+        name: "Location Name",
+        address: "Address",
+        radius: "Radius (m)",
+        latitude: "Latitude",
+        longitude: "Longitude",
+        status: "Status",
+        actions: "Actions",
+    },
+    form: {
+        createTitle: "Add New Location",
+        editTitle: "Edit Location",
+        nameLabel: "Location Name",
+        namePlaceholder: "e.g. Jakarta Head Office",
+        addressLabel: "Address",
+        addressPlaceholder: "Full location address",
+        latitudeLabel: "Latitude",
+        longitudeLabel: "Longitude",
+        radiusLabel: "Radius (meters)",
+        radiusHelper: "Maximum distance from center point allowed for check-in.",
+        pickOnMap: "Pick on Map",
+        statusLabel: "Status",
+        saveButton: "Save Location",
+        cancelButton: "Cancel",
+    },
+    map: {
+        title: "Pick Location on Map",
+        searchPlaceholder: "Search address...",
+        confirmButton: "Confirm Location",
+        currentLocation: "My Location",
+    },
+    delete: {
+        title: "Delete Location",
+        message: "Delete location \"{{name}}\"? This action cannot be undone.",
+        confirm: "Yes, Delete",
+        cancel: "Cancel",
+    },
+    messages: {
+        createSuccess: "Location added successfully.",
+        updateSuccess: "Location updated successfully.",
+        deleteSuccess: "Location deleted successfully.",
+        error: "An error occurred. Please try again.",
+    },
+} satisfies LocationTranslations;

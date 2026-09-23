@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Sparkles, Lock, AlertCircle } from "lucide-react";
 import type { User } from "../../../types/api";
 import { Modal } from "../../../components/ui/Modal";
@@ -20,6 +21,7 @@ export function ResetPasswordModal({
     onSubmit,
     isSubmitting,
 }: ResetPasswordModalProps) {
+    const { t } = useTranslation(["user", "common"]);
     const [mode, setMode] = useState<"auto" | "manual">("auto");
     const [customPassword, setCustomPassword] = useState("");
     const [error, setError] = useState<string | null>(null);
@@ -51,8 +53,8 @@ export function ResetPasswordModal({
         <Modal
             open={open}
             onClose={onClose}
-            title={`Reset Kata Sandi: ${user?.email}`}
-            description="Buat kata sandi baru untuk akun pengguna ini. Pengguna akan diwajibkan mengganti kata sandi saat login berikutnya."
+            title={`${t("resetPassword.title", { ns: "user" })}: ${user?.email}`}
+            description={t("resetPassword.subtitle", { ns: "user" })}
             maxWidth="md"
         >
             <form onSubmit={handleSubmit} className="space-y-4">

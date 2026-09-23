@@ -8,8 +8,8 @@ export interface DialogProps {
   title?: string;
   description?: string;
   children: React.ReactNode;
-  maxWidth?: "sm" | "md" | "lg" | "xl" | "2xl" | "3xl" | "4xl";
-  size?: "sm" | "md" | "lg" | "xl" | "2xl" | "3xl" | "4xl" | string;
+  maxWidth?: "sm" | "md" | "lg" | "xl" | "2xl" | "3xl" | "4xl" | "5xl" | "6xl";
+  size?: "sm" | "md" | "lg" | "xl" | "2xl" | "3xl" | "4xl" | "5xl" | "6xl" | string;
 }
 
 export function Dialog({
@@ -23,7 +23,7 @@ export function Dialog({
   size = "md",
 }: DialogProps) {
   const activeOpen = open ?? isOpen ?? false;
-  const activeSize = (maxWidth ?? size) as "sm" | "md" | "lg" | "xl" | "2xl" | "3xl" | "4xl";
+  const activeSize = (maxWidth ?? size) as "sm" | "md" | "lg" | "xl" | "2xl" | "3xl" | "4xl" | "5xl" | "6xl";
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -50,7 +50,11 @@ export function Dialog({
               ? "max-w-3xl"
               : activeSize === "4xl"
                 ? "max-w-4xl"
-                : "max-w-md";
+                : activeSize === "5xl"
+                  ? "max-w-5xl"
+                  : activeSize === "6xl"
+                    ? "max-w-6xl"
+                    : "max-w-md";
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">

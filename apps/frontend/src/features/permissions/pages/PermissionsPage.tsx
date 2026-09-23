@@ -20,16 +20,28 @@ export function PermissionsPage() {
       p.name.toLowerCase().includes(search.toLowerCase()) ||
       p.resource.toLowerCase().includes(search.toLowerCase()) ||
       p.action.toLowerCase().includes(search.toLowerCase()) ||
+      (p.module_name ? p.module_name.toLowerCase().includes(search.toLowerCase()) : false) ||
+      (p.module_code ? p.module_code.toLowerCase().includes(search.toLowerCase()) : false) ||
       (p.description ? p.description.toLowerCase().includes(search.toLowerCase()) : false),
   );
 
-  // Group by resource
-  const permsByResource: Record<string, Permission[]> = {};
+  // Group by module
+  interface ModuleGroup {
+    key: string;
+    title: string;
+    list: Permission[];
+  }
+
+  const moduleGroupsMap = new Map<string, ModuleGroup>();
   filteredPerms.forEach((p) => {
-    const list = permsByResource[p.resource] || [];
-    list.push(p);
-    permsByResource[p.resource] = list;
+    const key = p.module_code || p.resource;
+    const title = p.module_name ? `${p.module_name} (${key})` : `Modul: ${key}`;
+    if (!moduleGroupsMap.has(key)) {
+      moduleGroupsMap.set(key, { key, title, list: [] });
+    }
+    moduleGroupsMap.get(key)!.list.push(p);
   });
+  const moduleGroups = Array.from(moduleGroupsMap.values());
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
@@ -62,24 +74,24 @@ export function PermissionsPage() {
       {/* Permissions List Grouped */}
       {isLoading ? (
         <div className="py-12 text-center text-xs text-gray-400">Memuat katalog izin sistem...</div>
-      ) : Object.keys(permsByResource).length === 0 ? (
+      ) : moduleGroups.length === 0 ? (
         <div className="py-12 text-center text-xs text-gray-400">
           Tidak ada izin sistem yang cocok dengan kriteria pencarian.
         </div>
       ) : (
         <div className="space-y-6">
-          {Object.entries(permsByResource).map(([resource, list]) => (
-            <Card key={resource}>
+          {moduleGroups.map((group) => (
+            <Card key={group.key}>
               <CardHeader className="py-3 bg-gray-50/70 border-b border-gray-200">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Shield className="w-4 h-4 text-indigo-600" />
                     <CardTitle className="text-xs font-bold uppercase tracking-wider text-gray-900">
-                      Modul: {resource}
+                      {group.title}
                     </CardTitle>
                   </div>
                   <Badge variant="neutral" size="sm">
-                    {list.length} Izin
+                    {group.list.length} Izin
                   </Badge>
                 </div>
               </CardHeader>
@@ -95,7 +107,7 @@ export function PermissionsPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {list.map((p) => (
+                      {group.list.map((p) => (
                         <tr key={p.id} className="hover:bg-gray-50/50">
                           <td className="px-4 py-2.5 font-mono font-semibold text-indigo-900">{p.name}</td>
                           <td className="px-4 py-2.5">

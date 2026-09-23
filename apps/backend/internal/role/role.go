@@ -16,28 +16,71 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// Module represents a system module entity.
+type Module struct {
+	ID          uuid.UUID `json:"id"`
+	Code        string    `json:"code"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	Icon        string    `json:"icon"`
+	SortOrder   int       `json:"sort_order"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// RoleModuleSummary provides aggregated module coverage for a role.
+type RoleModuleSummary struct {
+	ID                uuid.UUID `json:"id"`
+	Code              string    `json:"code"`
+	Name              string    `json:"name"`
+	Description       string    `json:"description"`
+	Icon              string    `json:"icon"`
+	SortOrder         int       `json:"sort_order"`
+	TotalPermissions  int       `json:"total_permissions"`
+	ActivePermissions int       `json:"active_permissions"`
+}
+
+// ModuleWithPermissions represents a module and all its permissions in the system catalog.
+type ModuleWithPermissions struct {
+	ID          uuid.UUID    `json:"id"`
+	Code        string       `json:"code"`
+	Name        string       `json:"name"`
+	Description string       `json:"description"`
+	Icon        string       `json:"icon"`
+	SortOrder   int          `json:"sort_order"`
+	CreatedAt   time.Time    `json:"created_at"`
+	UpdatedAt   time.Time    `json:"updated_at"`
+	Permissions []Permission `json:"permissions"`
+}
+
 // Permission represents a system permission item.
 type Permission struct {
-	ID          uuid.UUID `json:"id"`
-	Name        string    `json:"name"`
-	Resource    string    `json:"resource"`
-	Action      string    `json:"action"`
-	Description string    `json:"description"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID          uuid.UUID  `json:"id"`
+	ModuleID    *uuid.UUID `json:"module_id,omitempty"`
+	ModuleCode  string     `json:"module_code,omitempty"`
+	ModuleName  string     `json:"module_name,omitempty"`
+	Name        string     `json:"name"`
+	Resource    string     `json:"resource"`
+	Action      string     `json:"action"`
+	Description string     `json:"description"`
+	CreatedAt   time.Time  `json:"created_at"`
 }
 
 // Role represents a user role.
 type Role struct {
-	ID              uuid.UUID    `json:"id"`
-	Name            string       `json:"name"`
-	DisplayName     string       `json:"display_name"`
-	Description     *string      `json:"description,omitempty"`
-	IsSystem        bool         `json:"is_system"`
-	UserCount       int          `json:"user_count,omitempty"`
-	PermissionCount int          `json:"permission_count,omitempty"`
-	Permissions     []Permission `json:"permissions,omitempty"`
-	CreatedAt       time.Time    `json:"created_at"`
-	UpdatedAt       time.Time    `json:"updated_at"`
+	ID              uuid.UUID           `json:"id"`
+	Name            string              `json:"name"`
+	DisplayName     string              `json:"display_name"`
+	Description     *string             `json:"description,omitempty"`
+	IsSystem        bool                `json:"is_system"`
+	UserCount       int                 `json:"user_count,omitempty"`
+	PermissionCount int                 `json:"permission_count,omitempty"`
+	ModuleCount     int                 `json:"module_count,omitempty"`
+	TotalModules    int                 `json:"total_modules,omitempty"`
+	Modules         []RoleModuleSummary `json:"modules,omitempty"`
+	Permissions     []Permission        `json:"permissions,omitempty"`
+	CreatedAt       time.Time           `json:"created_at"`
+	UpdatedAt       time.Time           `json:"updated_at"`
 }
 
 // Service handles role and permission operations.
@@ -51,7 +94,7 @@ func NewService(db *pgxpool.Pool, rbacSvc *rbac.Service) *Service {
 	return &Service{db: db, rbacSvc: rbacSvc}
 }
 
-// ListRoles returns all active roles with counts.
+// ListRoles returns all active roles with counts, dynamic active module summaries, and permissions.
 func (s *Service) ListRoles(ctx context.Context) ([]Role, error) {
 	const q = `
 		SELECT r.id, r.name, r.display_name, r.description, r.is_system, r.created_at, r.updated_at,
@@ -77,6 +120,7 @@ func (s *Service) ListRoles(ctx context.Context) ([]Role, error) {
 	defer rows.Close()
 
 	var roles []Role
+	roleIndexMap := make(map[uuid.UUID]int)
 	for rows.Next() {
 		var r Role
 		if err := rows.Scan(
@@ -92,22 +136,128 @@ func (s *Service) ListRoles(ctx context.Context) ([]Role, error) {
 		); err != nil {
 			return nil, fmt.Errorf("scanning role: %w", err)
 		}
+		r.Modules = []RoleModuleSummary{}
+		r.Permissions = []Permission{}
+		roleIndexMap[r.ID] = len(roles)
 		roles = append(roles, r)
 	}
 
-	if roles == nil {
-		roles = []Role{}
+	if len(roles) == 0 {
+		return []Role{}, nil
+	}
+
+	// Query module summaries for each role
+	const moduleQ = `
+		SELECT 
+			r.id AS role_id,
+			m.id AS module_id,
+			m.code AS module_code,
+			m.name AS module_name,
+			m.description AS module_desc,
+			m.icon AS module_icon,
+			m.sort_order AS module_sort_order,
+			COUNT(p.id) AS total_permissions,
+			COUNT(rp.permission_id) AS active_permissions
+		FROM roles r
+		CROSS JOIN modules m
+		JOIN permissions p ON p.module_id = m.id
+		LEFT JOIN role_permissions rp ON rp.role_id = r.id AND rp.permission_id = p.id
+		WHERE r.deleted_at IS NULL
+		GROUP BY r.id, m.id, m.code, m.name, m.description, m.icon, m.sort_order
+		ORDER BY r.id, m.sort_order ASC
+	`
+	mRows, err := s.db.Query(ctx, moduleQ)
+	if err != nil {
+		return nil, fmt.Errorf("querying role modules: %w", err)
+	}
+	defer mRows.Close()
+
+	for mRows.Next() {
+		var roleID uuid.UUID
+		var mod RoleModuleSummary
+		if err := mRows.Scan(
+			&roleID,
+			&mod.ID,
+			&mod.Code,
+			&mod.Name,
+			&mod.Description,
+			&mod.Icon,
+			&mod.SortOrder,
+			&mod.TotalPermissions,
+			&mod.ActivePermissions,
+		); err != nil {
+			return nil, fmt.Errorf("scanning role module: %w", err)
+		}
+		if idx, ok := roleIndexMap[roleID]; ok {
+			roles[idx].TotalModules++
+			if mod.ActivePermissions > 0 {
+				roles[idx].Modules = append(roles[idx].Modules, mod)
+				roles[idx].ModuleCount++
+			}
+		}
+	}
+
+	// Query active permissions for each role
+	const permQ = `
+		SELECT 
+			rp.role_id,
+			p.id,
+			p.module_id,
+			m.code AS module_code,
+			m.name AS module_name,
+			p.name,
+			p.resource,
+			p.action,
+			p.description,
+			p.created_at
+		FROM role_permissions rp
+		JOIN permissions p ON rp.permission_id = p.id
+		JOIN modules m ON p.module_id = m.id
+		ORDER BY rp.role_id, m.sort_order ASC, p.name ASC
+	`
+	pRows, err := s.db.Query(ctx, permQ)
+	if err != nil {
+		return nil, fmt.Errorf("querying role permissions: %w", err)
+	}
+	defer pRows.Close()
+
+	for pRows.Next() {
+		var roleID uuid.UUID
+		var p Permission
+		if err := pRows.Scan(
+			&roleID,
+			&p.ID,
+			&p.ModuleID,
+			&p.ModuleCode,
+			&p.ModuleName,
+			&p.Name,
+			&p.Resource,
+			&p.Action,
+			&p.Description,
+			&p.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scanning role permission: %w", err)
+		}
+		if idx, ok := roleIndexMap[roleID]; ok {
+			roles[idx].Permissions = append(roles[idx].Permissions, p)
+		}
 	}
 
 	return roles, nil
 }
 
-// GetRoleByID fetches a role and its assigned permissions.
+// GetRoleByID fetches a role and its assigned permissions along with module summaries.
 func (s *Service) GetRoleByID(ctx context.Context, id uuid.UUID) (*Role, error) {
 	const q = `
-		SELECT id, name, display_name, description, is_system, created_at, updated_at
-		FROM roles
-		WHERE id = $1 AND deleted_at IS NULL
+		SELECT r.id, r.name, r.display_name, r.description, r.is_system, r.created_at, r.updated_at,
+		       COUNT(DISTINCT ur.user_id) AS user_count,
+		       COUNT(DISTINCT rp.permission_id) AS permission_count
+		FROM roles r
+		LEFT JOIN user_roles ur ON r.id = ur.role_id
+		LEFT JOIN users u ON ur.user_id = u.id AND u.deleted_at IS NULL
+		LEFT JOIN role_permissions rp ON r.id = rp.role_id
+		WHERE r.id = $1 AND r.deleted_at IS NULL
+		GROUP BY r.id, r.name, r.display_name, r.description, r.is_system, r.created_at, r.updated_at
 	`
 	var r Role
 	err := s.db.QueryRow(ctx, q, id).Scan(
@@ -118,6 +268,8 @@ func (s *Service) GetRoleByID(ctx context.Context, id uuid.UUID) (*Role, error) 
 		&r.IsSystem,
 		&r.CreatedAt,
 		&r.UpdatedAt,
+		&r.UserCount,
+		&r.PermissionCount,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -126,12 +278,61 @@ func (s *Service) GetRoleByID(ctx context.Context, id uuid.UUID) (*Role, error) 
 		return nil, fmt.Errorf("querying role: %w", err)
 	}
 
+	r.Modules = []RoleModuleSummary{}
+	r.Permissions = []Permission{}
+
+	// Query module summaries for this role
+	const moduleQ = `
+		SELECT 
+			m.id AS module_id,
+			m.code AS module_code,
+			m.name AS module_name,
+			m.description AS module_desc,
+			m.icon AS module_icon,
+			m.sort_order AS module_sort_order,
+			COUNT(p.id) AS total_permissions,
+			COUNT(rp.permission_id) AS active_permissions
+		FROM modules m
+		JOIN permissions p ON p.module_id = m.id
+		LEFT JOIN role_permissions rp ON rp.role_id = $1 AND rp.permission_id = p.id
+		GROUP BY m.id, m.code, m.name, m.description, m.icon, m.sort_order
+		ORDER BY m.sort_order ASC
+	`
+	mRows, err := s.db.Query(ctx, moduleQ, id)
+	if err != nil {
+		return nil, fmt.Errorf("querying role modules: %w", err)
+	}
+	defer mRows.Close()
+
+	for mRows.Next() {
+		var mod RoleModuleSummary
+		if err := mRows.Scan(
+			&mod.ID,
+			&mod.Code,
+			&mod.Name,
+			&mod.Description,
+			&mod.Icon,
+			&mod.SortOrder,
+			&mod.TotalPermissions,
+			&mod.ActivePermissions,
+		); err != nil {
+			return nil, fmt.Errorf("scanning role module: %w", err)
+		}
+		r.TotalModules++
+		if mod.ActivePermissions > 0 {
+			r.ModuleCount++
+		}
+		r.Modules = append(r.Modules, mod)
+	}
+
 	const permQ = `
-		SELECT p.id, p.name, p.resource, p.action, p.description, p.created_at
+		SELECT p.id, p.module_id, m.code AS module_code, m.name AS module_name,
+		       p.name, p.resource, p.action, p.description, p.created_at
 		FROM role_permissions rp
 		JOIN permissions p ON rp.permission_id = p.id
+		JOIN modules m ON p.module_id = m.id
 		WHERE rp.role_id = $1
-		ORDER BY p.name ASC
+		ORDER BY m.sort_order ASC, p.name ASC
 	`
 	pRows, err := s.db.Query(ctx, permQ, id)
 	if err != nil {
@@ -139,10 +340,19 @@ func (s *Service) GetRoleByID(ctx context.Context, id uuid.UUID) (*Role, error) 
 	}
 	defer pRows.Close()
 
-	r.Permissions = []Permission{}
 	for pRows.Next() {
 		var p Permission
-		if err := pRows.Scan(&p.ID, &p.Name, &p.Resource, &p.Action, &p.Description, &p.CreatedAt); err != nil {
+		if err := pRows.Scan(
+			&p.ID,
+			&p.ModuleID,
+			&p.ModuleCode,
+			&p.ModuleName,
+			&p.Name,
+			&p.Resource,
+			&p.Action,
+			&p.Description,
+			&p.CreatedAt,
+		); err != nil {
 			return nil, fmt.Errorf("scanning permission: %w", err)
 		}
 		r.Permissions = append(r.Permissions, p)
@@ -185,12 +395,14 @@ func (s *Service) AssignPermissions(ctx context.Context, actor *rbac.Principal, 
 	return httpx.NewAppError(httpx.CodeForbidden, "hak akses role sistem bersifat permanen dan tidak dapat diubah")
 }
 
-// ListPermissions returns all 34 catalog permissions.
+// ListPermissions returns all catalog permissions linked with module information.
 func (s *Service) ListPermissions(ctx context.Context) ([]Permission, error) {
 	const q = `
-		SELECT id, name, resource, action, description, created_at
-		FROM permissions
-		ORDER BY resource ASC, name ASC
+		SELECT p.id, p.module_id, m.code AS module_code, m.name AS module_name,
+		       p.name, p.resource, p.action, p.description, p.created_at
+		FROM permissions p
+		JOIN modules m ON p.module_id = m.id
+		ORDER BY m.sort_order ASC, p.name ASC
 	`
 	rows, err := s.db.Query(ctx, q)
 	if err != nil {
@@ -201,7 +413,17 @@ func (s *Service) ListPermissions(ctx context.Context) ([]Permission, error) {
 	var perms []Permission
 	for rows.Next() {
 		var p Permission
-		if err := rows.Scan(&p.ID, &p.Name, &p.Resource, &p.Action, &p.Description, &p.CreatedAt); err != nil {
+		if err := rows.Scan(
+			&p.ID,
+			&p.ModuleID,
+			&p.ModuleCode,
+			&p.ModuleName,
+			&p.Name,
+			&p.Resource,
+			&p.Action,
+			&p.Description,
+			&p.CreatedAt,
+		); err != nil {
 			return nil, fmt.Errorf("scanning permission: %w", err)
 		}
 		perms = append(perms, p)
@@ -212,6 +434,82 @@ func (s *Service) ListPermissions(ctx context.Context) ([]Permission, error) {
 	}
 
 	return perms, nil
+}
+
+// ListModules returns all modules with their associated permissions.
+func (s *Service) ListModules(ctx context.Context) ([]ModuleWithPermissions, error) {
+	const modQ = `
+		SELECT id, code, name, description, icon, sort_order, created_at, updated_at
+		FROM modules
+		ORDER BY sort_order ASC
+	`
+	mRows, err := s.db.Query(ctx, modQ)
+	if err != nil {
+		return nil, fmt.Errorf("querying modules: %w", err)
+	}
+	defer mRows.Close()
+
+	var modules []ModuleWithPermissions
+	modIndexMap := make(map[uuid.UUID]int)
+	for mRows.Next() {
+		var m ModuleWithPermissions
+		if err := mRows.Scan(
+			&m.ID,
+			&m.Code,
+			&m.Name,
+			&m.Description,
+			&m.Icon,
+			&m.SortOrder,
+			&m.CreatedAt,
+			&m.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scanning module: %w", err)
+		}
+		m.Permissions = []Permission{}
+		modIndexMap[m.ID] = len(modules)
+		modules = append(modules, m)
+	}
+
+	if len(modules) == 0 {
+		return []ModuleWithPermissions{}, nil
+	}
+
+	const permQ = `
+		SELECT p.id, p.module_id, m.code AS module_code, m.name AS module_name,
+		       p.name, p.resource, p.action, p.description, p.created_at
+		FROM permissions p
+		JOIN modules m ON p.module_id = m.id
+		ORDER BY m.sort_order ASC, p.name ASC
+	`
+	pRows, err := s.db.Query(ctx, permQ)
+	if err != nil {
+		return nil, fmt.Errorf("querying permissions for modules: %w", err)
+	}
+	defer pRows.Close()
+
+	for pRows.Next() {
+		var p Permission
+		if err := pRows.Scan(
+			&p.ID,
+			&p.ModuleID,
+			&p.ModuleCode,
+			&p.ModuleName,
+			&p.Name,
+			&p.Resource,
+			&p.Action,
+			&p.Description,
+			&p.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scanning module permission: %w", err)
+		}
+		if p.ModuleID != nil {
+			if idx, ok := modIndexMap[*p.ModuleID]; ok {
+				modules[idx].Permissions = append(modules[idx].Permissions, p)
+			}
+		}
+	}
+
+	return modules, nil
 }
 
 func (s *Service) getPermissionNamesByIDs(ctx context.Context, ids []uuid.UUID) ([]string, error) {
@@ -416,6 +714,16 @@ func (h *Handler) AssignPermissions(w http.ResponseWriter, r *http.Request) {
 
 // ListPermissions handles GET /api/v1/permissions
 func (h *Handler) ListPermissions(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Query().Get("group_by") == "module" {
+		modules, err := h.svc.ListModules(r.Context())
+		if err != nil {
+			httpx.Fail(r.Context(), w, httpx.NewAppError(httpx.CodeInternalError, "failed to list modules"))
+			return
+		}
+		httpx.OK(w, modules)
+		return
+	}
+
 	perms, err := h.svc.ListPermissions(r.Context())
 	if err != nil {
 		httpx.Fail(r.Context(), w, httpx.NewAppError(httpx.CodeInternalError, "failed to list permissions"))
@@ -432,4 +740,14 @@ func (h *Handler) ListPermissions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpx.OK(w, perms)
+}
+
+// ListModules handles GET /api/v1/modules
+func (h *Handler) ListModules(w http.ResponseWriter, r *http.Request) {
+	modules, err := h.svc.ListModules(r.Context())
+	if err != nil {
+		httpx.Fail(r.Context(), w, httpx.NewAppError(httpx.CodeInternalError, "failed to list modules"))
+		return
+	}
+	httpx.OK(w, modules)
 }

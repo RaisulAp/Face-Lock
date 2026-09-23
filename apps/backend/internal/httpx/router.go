@@ -48,6 +48,7 @@ type Handlers struct {
 	RoleDelete            http.HandlerFunc
 	RoleAssignPermissions http.HandlerFunc
 	PermissionList        http.HandlerFunc
+	ModuleList            http.HandlerFunc
 
 	// Settings
 	SettingsList     http.HandlerFunc
@@ -286,6 +287,9 @@ func mountAPIv1(r chi.Router, deps RouterDeps) {
 			}
 			if deps.Handlers.PermissionList != nil {
 				r.With(rbacGuard(deps, "permission.read")).Get("/permissions", deps.Handlers.PermissionList)
+			}
+			if deps.Handlers.ModuleList != nil {
+				r.With(rbacGuard(deps, "permission.read")).Get("/modules", deps.Handlers.ModuleList)
 			}
 
 			// Settings

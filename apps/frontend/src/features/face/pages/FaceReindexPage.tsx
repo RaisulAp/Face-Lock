@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../../lib/api";
 import { useToast } from "../../../components/ui/Toast";
@@ -20,6 +21,7 @@ interface DryRunResult {
 
 export function FaceReindexPage() {
   const toast = useToast();
+  const { t } = useTranslation(["face", "common"]);
   const [targetModel, setTargetModel] = useState("buffalo_l");
   const [dryRunResult, setDryRunResult] = useState<DryRunResult | null>(null);
   const [isDryRunning, setIsDryRunning] = useState(false);
@@ -136,10 +138,10 @@ export function FaceReindexPage() {
       <div>
         <div className="flex items-center gap-2">
           <RefreshCw className="w-5 h-5 text-indigo-600" />
-          <h1 className="text-xl font-bold text-gray-900">Reindex Model Biometrik Wajah</h1>
+          <h1 className="text-xl font-bold text-gray-900">{t("reindex.title", { ns: "face" })}</h1>
         </div>
         <p className="text-xs text-gray-500 mt-0.5">
-          Proses regenerasi vektor embedding seluruh karyawan saat terjadi pergantian model AI atau kalibrasi.
+          {t("reindex.subtitle", { ns: "face" })}
         </p>
       </div>
 

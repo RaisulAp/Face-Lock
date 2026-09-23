@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "../../../lib/auth/useAuth";
 import { api } from "../../../lib/api";
 import { useToast } from "../../../components/ui/Toast";
@@ -9,6 +10,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "../../../components/ui
 import { User, KeyRound, Shield, LogOut } from "lucide-react";
 
 export function AccountPage() {
+    const { t } = useTranslation(["auth", "common"]);
     const { user, logout, refetchUser } = useAuth();
     const navigate = useNavigate();
     const toast = useToast();
@@ -90,9 +92,9 @@ export function AccountPage() {
     return (
         <div className="space-y-6 max-w-4xl mx-auto">
             <div>
-                <h1 className="text-xl font-bold text-gray-900">Pengaturan Akun</h1>
+                <h1 className="text-xl font-bold text-gray-900">{t("account.title", { ns: "auth" })}</h1>
                 <p className="text-xs text-gray-500 mt-0.5">
-                    Kelola profil pengguna, kata sandi, dan keamanan sesi Anda.
+                    {t("account.subtitle", { ns: "auth" })}
                 </p>
             </div>
 

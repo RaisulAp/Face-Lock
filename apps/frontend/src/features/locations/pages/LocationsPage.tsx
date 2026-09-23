@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../../lib/api";
 import { useToast } from "../../../components/ui/Toast";
@@ -20,6 +21,7 @@ import { MapPin, Plus, Edit2, Trash2, Crosshair } from "lucide-react";
 
 export function LocationsPage() {
   const toast = useToast();
+  const { t } = useTranslation(["location", "common"]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingLocation, setEditingLocation] = useState<OfficeLocation | null>(null);
 
@@ -192,16 +194,16 @@ export function LocationsPage() {
         <div>
           <div className="flex items-center gap-2">
             <MapPin className="w-5 h-5 text-indigo-600" />
-            <h1 className="text-xl font-bold text-gray-900">Lokasi Kantor & Geofence</h1>
+            <h1 className="text-xl font-bold text-gray-900">{t("page.title", { ns: "location" })}</h1>
           </div>
           <p className="text-xs text-gray-500 mt-0.5">
-            Daftar titik koordinat absensi resmi dan radius toleransi jarak (Decision D22).
+            {t("page.subtitle", { ns: "location" })}
           </p>
         </div>
 
         <Button variant="primary" size="sm" onClick={handleOpenCreate}>
           <Plus className="w-4 h-4 mr-1.5" />
-          Tambah Lokasi Kantor
+          {t("page.createLocation", { ns: "location" })}
         </Button>
       </div>
 
@@ -211,14 +213,16 @@ export function LocationsPage() {
         data={locations ?? []}
         keyExtractor={(item) => item.id}
         isLoading={isLoading}
-        emptyTitle="Belum Ada Lokasi Kantor"
-        emptyDescription="Tambahkan kantor atau titik presensi untuk memvalidasi geolokasi absensi."
+        emptyTitle={t("page.noData", { ns: "location" })}
+        emptyDescription={t("page.noData", { ns: "location" })}
       />
 
       {/* Modal Create / Edit with Leaflet MapPicker */}
       <Dialog open={isModalOpen} onClose={() => setIsModalOpen(false)} size="lg">
         <DialogHeader>
-          <DialogTitle>{editingLocation ? "Edit Lokasi Kantor" : "Tambah Lokasi Kantor Baru"}</DialogTitle>
+          <DialogTitle>
+            {editingLocation ? t("form.editTitle", { ns: "location" }) : t("form.createTitle", { ns: "location" })}
+          </DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit}>

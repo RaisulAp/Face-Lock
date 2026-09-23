@@ -1,7 +1,8 @@
 import { useState, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../../lib/api";
-import type { Role, Permission } from "../../../types/api";
+import type { Role, Permission, Module } from "../../../types/api";
 import { Card, CardHeader, CardTitle, CardContent } from "../../../components/ui/Card";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
@@ -14,13 +15,13 @@ import {
   Users,
   Search,
   Shield,
-  Layers,
-  CheckCircle2,
+  Table,
 } from "lucide-react";
 import { PermissionMatrixModal } from "../components/PermissionMatrixModal";
 import { MODULE_DEFINITIONS } from "../roleModules";
 
 export function RolesPage() {
+  const { t } = useTranslation(["role", "common"]);
   const [matrixOpen, setMatrixOpen] = useState(false);
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
 
@@ -45,17 +46,39 @@ export function RolesPage() {
     queryFn: () => api.get<Permission[]>("/api/v1/permissions"),
   });
 
+  // Fetch system modules catalog
+  const { data: modules } = useQuery<Module[]>({
+    queryKey: ["modules"],
+    queryFn: () => api.get<Module[]>("/api/v1/modules"),
+  });
+
   // Open Permission Matrix Modal
   const openPermMatrixModal = async (r: Role) => {
     setSelectedRole(r);
+    setMatrixOpen(true);
     try {
       const roleDetail = await api.get<Role>(`/api/v1/roles/${r.id}`);
+      setSelectedRole(roleDetail);
       const currentIds = (roleDetail.permissions || []).map((p) => p.id);
       setSelectedPermIds(currentIds);
     } catch {
-      setSelectedPermIds([]);
+      const currentIds = (r.permissions || []).map((p) => p.id);
+      setSelectedPermIds(currentIds);
     }
-    setMatrixOpen(true);
+  };
+
+  // Switch role inside matrix modal
+  const handleSelectRoleInModal = async (r: Role) => {
+    setSelectedRole(r);
+    try {
+      const roleDetail = await api.get<Role>(`/api/v1/roles/${r.id}`);
+      setSelectedRole(roleDetail);
+      const currentIds = (roleDetail.permissions || []).map((p) => p.id);
+      setSelectedPermIds(currentIds);
+    } catch {
+      const currentIds = (r.permissions || []).map((p) => p.id);
+      setSelectedPermIds(currentIds);
+    }
   };
 
   // Filtered Roles List
@@ -72,16 +95,6 @@ export function RolesPage() {
       return true;
     });
   }, [roles, searchQuery]);
-
-  // Statistics
-  const stats = useMemo(() => {
-    if (!roles) return { total: 0, system: 0, users: 0 };
-    return {
-      total: roles.length,
-      system: roles.filter((r) => r.is_system).length,
-      users: roles.reduce((acc, r) => acc + (r.user_count || 0), 0),
-    };
-  }, [roles]);
 
   // Helper to find modules covered by role's permissions
   const getCoveredModules = (role: Role) => {
@@ -100,56 +113,26 @@ export function RolesPage() {
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-6 h-6 text-indigo-600" />
             <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
-              Tingkatan Peran & Hak Akses (RBAC)
+              {t("page.title", { ns: "role" })}
             </h1>
           </div>
-          <p className="text-xs sm:text-sm text-gray-500 mt-1">
-            Arsitektur hak akses FaceClock menggunakan 3 peran sistem baku. Setiap akun pengguna memiliki tepat 1 peran akses.
-          </p>
-        </div>
-      </div>
-
-      {/* Metric Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <div className="p-4 rounded-xl bg-white border border-gray-200 shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-gray-500">Peran Sistem</span>
-            <Lock className="w-4 h-4 text-indigo-600" />
-          </div>
-          <div className="text-2xl font-bold text-gray-900 mt-2">{stats.total}</div>
-          <div className="text-[11px] text-gray-400 mt-0.5">Tingkatan wewenang baku platform</div>
         </div>
 
-        <div className="p-4 rounded-xl bg-white border border-gray-200 shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-gray-500">Total Pengguna</span>
-            <Users className="w-4 h-4 text-blue-600" />
-          </div>
-          <div className="text-2xl font-bold text-gray-900 mt-2">{stats.users}</div>
-          <div className="text-[11px] text-gray-400 mt-0.5">Pengguna terdaftar dengan peran aktif</div>
-        </div>
-
-        <div className="p-4 rounded-xl bg-white border border-gray-200 shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-gray-500">Katalog Izin Sistem</span>
-            <Layers className="w-4 h-4 text-emerald-600" />
-          </div>
-          <div className="text-2xl font-bold text-gray-900 mt-2">
-            {allPerms?.length || 39} Izin
-          </div>
-          <div className="text-[11px] text-gray-400 mt-0.5">
-            Dikelompokkan ke {MODULE_DEFINITIONS.length} modul bisnis
-          </div>
-        </div>
-
-        <div className="p-4 rounded-xl bg-white border border-gray-200 shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-gray-500">Prinsip Akses</span>
-            <CheckCircle2 className="w-4 h-4 text-purple-600" />
-          </div>
-          <div className="text-sm font-bold text-gray-900 mt-2">1 User = 1 Role</div>
-          <div className="text-[11px] text-gray-400 mt-0.5">Akses tunggal, ketat & aman</div>
-        </div>
+        {roles && roles.length > 0 && (
+          <Button
+            type="button"
+            variant="primary"
+            size="sm"
+            onClick={() => {
+              const firstRole = roles[0];
+              if (firstRole) openPermMatrixModal(firstRole);
+            }}
+            className="self-start sm:self-auto shadow-xs"
+          >
+            <Table className="w-4 h-4 mr-1.5" />
+            {t("card.viewMatrix", { ns: "role" })}
+          </Button>
+        )}
       </div>
 
       {/* Search Bar */}
@@ -158,7 +141,7 @@ export function RolesPage() {
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <Input
             type="text"
-            placeholder="Cari peran berdasarkan nama atau deskripsi..."
+            placeholder={t("page.searchPlaceholder", { ns: "role" })}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-9 text-xs"
@@ -179,7 +162,7 @@ export function RolesPage() {
         ) : filteredRoles.length === 0 ? (
           <div className="col-span-full py-16 text-center bg-white rounded-xl border border-gray-200 p-8 space-y-2">
             <Shield className="w-8 h-8 text-gray-300 mx-auto" />
-            <p className="text-sm font-semibold text-gray-700">Tidak ada peran yang cocok</p>
+            <p className="text-sm font-semibold text-gray-700">{t("page.noRolesFound", { ns: "role" })}</p>
             <p className="text-xs text-gray-400 max-w-sm mx-auto">
               Tidak ditemukan peran dengan kata kunci &quot;{searchQuery}&quot;.
             </p>
@@ -190,6 +173,8 @@ export function RolesPage() {
             const totalPerms = allPerms?.length || 39;
             const permCount = r.permission_count ?? r.permissions?.length ?? 0;
             const coveragePercent = Math.round((permCount / totalPerms) * 100);
+            const activeModulesCount = r.module_count ?? r.modules?.length ?? 0;
+            const totalModulesCount = r.total_modules ?? modules?.length ?? 8;
 
             return (
               <Card
@@ -214,7 +199,7 @@ export function RolesPage() {
 
                     <Badge variant="neutral" size="sm">
                       <Lock className="w-3 h-3 mr-1" />
-                      Sistem Baku
+                      {t("card.systemRole", { ns: "role" })}
                     </Badge>
                   </div>
                 </CardHeader>
@@ -229,11 +214,27 @@ export function RolesPage() {
                     <div className="text-[11px] font-semibold text-gray-500 mb-1.5 flex items-center justify-between">
                       <span>Cakupan Modul Aktif:</span>
                       <span className="text-[10px] font-mono text-indigo-600 font-bold">
-                        {permCount}/{totalPerms} Izin ({coveragePercent}%)
+                        {activeModulesCount}/{totalModulesCount} Modul ({coveragePercent}% • {permCount}/{totalPerms} Izin)
                       </span>
                     </div>
 
-                    {coveredModules.length > 0 ? (
+                    {r.modules && r.modules.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {r.modules.map((mod) => (
+                          <span
+                            key={mod.code}
+                            className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-100 text-slate-800 border border-slate-200 hover:bg-slate-200/80 transition-colors"
+                            title={`${mod.name}: ${mod.active_permissions} dari ${mod.total_permissions} wewenang aktif`}
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                            <span className="font-semibold text-gray-800">{mod.name}</span>
+                            <span className="font-mono text-[9px] text-indigo-700 font-bold bg-white px-1 py-0.2 rounded border border-gray-200">
+                              {mod.active_permissions}/{mod.total_permissions}
+                            </span>
+                          </span>
+                        ))}
+                      </div>
+                    ) : coveredModules.length > 0 ? (
                       <div className="flex flex-wrap gap-1">
                         {coveredModules.map((mod) => (
                           <span
@@ -273,7 +274,7 @@ export function RolesPage() {
                       className="text-xs w-full justify-center shadow-2xs hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-300"
                     >
                       <Key className="w-3.5 h-3.5 mr-1 text-indigo-600" />
-                      Lihat Rincian Hak Akses
+                      {t("card.viewMatrix", { ns: "role" })}
                     </Button>
                   </div>
                 </CardContent>
@@ -288,6 +289,8 @@ export function RolesPage() {
         open={matrixOpen}
         onClose={() => setMatrixOpen(false)}
         role={selectedRole}
+        roles={roles || []}
+        onSelectRole={handleSelectRoleInModal}
         allPermissions={allPerms || []}
         selectedPermIds={selectedPermIds}
       />

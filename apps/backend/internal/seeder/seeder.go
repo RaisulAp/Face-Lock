@@ -268,13 +268,15 @@ func Run(ctx context.Context, db *pgxpool.Pool, opts Options) error {
 		}
 	}
 
-	// employee: employee.read_self, face.enroll_self, face.read_self, attendance.checkin, attendance.read_self, settings.read
+	// employee: employee.read_self, face.enroll_self, face.read_self, attendance.checkin, attendance.create, attendance.read_self, location.read, settings.read
 	employeeAllowed := map[string]bool{
 		"employee.read_self":   true,
 		"face.enroll_self":     true,
 		"face.read_self":       true,
 		"attendance.checkin":   true,
+		"attendance.create":    true,
 		"attendance.read_self": true,
+		"location.read":        true,
 		"settings.read":        true,
 	}
 	employeeID := roleMap["employee"]

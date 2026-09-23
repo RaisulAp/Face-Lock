@@ -120,143 +120,81 @@ func TestRoleServiceAndHandler(t *testing.T) {
 		t.Errorf("expected error for non-existent role")
 	}
 
-	// 4. CreateRole
+	// 4. ListModules
+	modules, err := roleSvc.ListModules(ctx)
+	if err != nil {
+		t.Fatalf("ListModules failed: %v", err)
+	}
+	if len(modules) != 8 {
+		t.Errorf("expected 8 modules, got %d", len(modules))
+	}
+	for _, m := range modules {
+		if len(m.Permissions) == 0 {
+			t.Errorf("module %s has no permissions", m.Code)
+		}
+	}
+
+	// 5. Verify dynamic active modules on system roles
+	if len(superRole.Modules) != 8 {
+		t.Errorf("expected super_admin to have 8 active modules, got %d", len(superRole.Modules))
+	}
+	if len(adminRole.Modules) != 8 {
+		t.Errorf("expected admin to have 8 active modules, got %d", len(adminRole.Modules))
+	}
+	if len(employeeRole.Modules) != 5 {
+		t.Errorf("expected employee to have 5 active modules, got %d", len(employeeRole.Modules))
+	}
+
+	// 6. Role Immutability: Custom role operations must be forbidden
 	roleName := fmt.Sprintf("custom_role_%d", time.Now().UnixNano())
-	desc := "Custom role for testing"
-	created, err := roleSvc.CreateRole(ctx, superActor, CreateRoleParams{
+	desc := "Custom role attempt"
+	_, err = roleSvc.CreateRole(ctx, superActor, CreateRoleParams{
 		Name:          roleName,
 		DisplayName:   "Custom Role",
 		Description:   &desc,
 		PermissionIDs: permIDs,
 	})
-	if err != nil {
-		t.Fatalf("CreateRole failed: %v", err)
-	}
-	if created.Name != roleName || created.IsSystem {
-		t.Errorf("unexpected created role: %+v", created)
-	}
-	if len(created.Permissions) != len(permIDs) {
-		t.Errorf("expected %d permissions, got %d", len(permIDs), len(created.Permissions))
-	}
-
-	// Duplicate role name -> CodeRoleNameTaken
-	_, err = roleSvc.CreateRole(ctx, superActor, CreateRoleParams{
-		Name:        roleName,
-		DisplayName: "Duplicate Role",
-	})
 	if err == nil {
-		t.Errorf("expected duplicate role name to fail")
+		t.Errorf("expected CreateRole to be forbidden")
 	}
-	if appErr, ok := err.(*httpx.AppError); !ok || appErr.Code != httpx.CodeRoleNameTaken {
-		t.Errorf("expected CodeRoleNameTaken, got %v", err)
-	}
-
-	// Privilege escalation on CreateRole (admin actor assigning permissions they don't have)
-	// Find a permission adminActor doesn't have, e.g. system.settings.write or user.delete
-	var unheldPerm uuid.UUID
-	for _, p := range perms {
-		if _, ok := adminActor.Permissions[p.Name]; !ok {
-			unheldPerm = p.ID
-			break
-		}
-	}
-	if unheldPerm != uuid.Nil {
-		_, err = roleSvc.CreateRole(ctx, adminActor, CreateRoleParams{
-			Name:          fmt.Sprintf("esc_role_%d", time.Now().UnixNano()),
-			DisplayName:   "Escalation Role",
-			PermissionIDs: []uuid.UUID{unheldPerm},
-		})
-		if err == nil {
-			t.Errorf("expected privilege escalation on CreateRole to fail")
-		}
+	if appErr, ok := err.(*httpx.AppError); !ok || appErr.Code != httpx.CodeForbidden {
+		t.Errorf("expected CodeForbidden, got %v", err)
 	}
 
-	// 5. UpdateRole
-	newDN := "Updated Custom Role"
-	newDesc := "Updated description"
-	updated, err := roleSvc.UpdateRole(ctx, created.ID, UpdateRoleParams{
+	newDN := "Updated Role"
+	_, err = roleSvc.UpdateRole(ctx, superRole.ID, UpdateRoleParams{
 		DisplayName: &newDN,
-		Description: &newDesc,
 	})
-	if err != nil {
-		t.Fatalf("UpdateRole failed: %v", err)
-	}
-	if updated.DisplayName != newDN || *updated.Description != newDesc {
-		t.Errorf("update role mismatch: %+v", updated)
-	}
-
-	// Update non-existent
-	_, err = roleSvc.UpdateRole(ctx, uuid.New(), UpdateRoleParams{DisplayName: &newDN})
 	if err == nil {
-		t.Errorf("expected error updating non-existent role")
+		t.Errorf("expected UpdateRole to be forbidden")
+	}
+	if appErr, ok := err.(*httpx.AppError); !ok || appErr.Code != httpx.CodeForbidden {
+		t.Errorf("expected CodeForbidden, got %v", err)
 	}
 
-	// 6. AssignPermissions
-	var singlePerm []uuid.UUID
-	if len(permIDs) > 0 {
-		singlePerm = []uuid.UUID{permIDs[0]}
-	}
-	err = roleSvc.AssignPermissions(ctx, superActor, created.ID, singlePerm)
-	if err != nil {
-		t.Fatalf("AssignPermissions failed: %v", err)
-	}
-	refetched, _ := roleSvc.GetRoleByID(ctx, created.ID)
-	if len(refetched.Permissions) != len(singlePerm) {
-		t.Errorf("expected %d permission, got %d", len(singlePerm), len(refetched.Permissions))
-	}
-
-	// Privilege escalation on AssignPermissions
-	if unheldPerm != uuid.Nil {
-		err = roleSvc.AssignPermissions(ctx, adminActor, created.ID, []uuid.UUID{unheldPerm})
-		if err == nil {
-			t.Errorf("expected privilege escalation on AssignPermissions to fail")
-		}
-	}
-
-	// Non-super_admin modifying super_admin permissions
-	err = roleSvc.AssignPermissions(ctx, adminActor, superRole.ID, singlePerm)
-	if err == nil {
-		t.Errorf("expected non-super_admin editing super_admin role permissions to fail")
-	}
-
-	// 7. DeleteRole - System role immutability
 	err = roleSvc.DeleteRole(ctx, superRole.ID)
 	if err == nil {
-		t.Errorf("expected system role deletion to fail")
+		t.Errorf("expected DeleteRole to be forbidden")
 	}
-	if appErr, ok := err.(*httpx.AppError); !ok || appErr.Code != httpx.CodeSystemRoleImmutable {
-		t.Errorf("expected CodeSystemRoleImmutable, got %v", err)
+	if appErr, ok := err.(*httpx.AppError); !ok || appErr.Code != httpx.CodeForbidden {
+		t.Errorf("expected CodeForbidden, got %v", err)
 	}
 
-	// Role in use guard: assign role to an active user, then attempt to delete
-	var activeUserID uuid.UUID
-	err = pool.QueryRow(ctx, `SELECT id FROM users WHERE is_active = true AND deleted_at IS NULL LIMIT 1`).Scan(&activeUserID)
+	err = roleSvc.AssignPermissions(ctx, superActor, superRole.ID, permIDs)
 	if err == nil {
-		_, _ = pool.Exec(ctx, `INSERT INTO user_roles (user_id, role_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, activeUserID, created.ID)
-		err = roleSvc.DeleteRole(ctx, created.ID)
-		if err == nil {
-			t.Errorf("expected role in use deletion to fail")
-		}
-		if appErr, ok := err.(*httpx.AppError); !ok || appErr.Code != httpx.CodeRoleInUse {
-			t.Errorf("expected CodeRoleInUse, got %v", err)
-		}
-		// Unassign role from user
-		_, _ = pool.Exec(ctx, `DELETE FROM user_roles WHERE user_id = $1 AND role_id = $2`, activeUserID, created.ID)
+		t.Errorf("expected AssignPermissions to be forbidden")
+	}
+	if appErr, ok := err.(*httpx.AppError); !ok || appErr.Code != httpx.CodeForbidden {
+		t.Errorf("expected CodeForbidden, got %v", err)
 	}
 
-	// Delete custom role succeeds
-	err = roleSvc.DeleteRole(ctx, created.ID)
-	if err != nil {
-		t.Fatalf("DeleteRole failed: %v", err)
-	}
-
-	// Delete already deleted role -> 404
-	err = roleSvc.DeleteRole(ctx, created.ID)
+	// Also admin cannot perform these
+	err = roleSvc.AssignPermissions(ctx, adminActor, adminRole.ID, permIDs)
 	if err == nil {
-		t.Errorf("expected error deleting already deleted role")
+		t.Errorf("expected AssignPermissions for admin to be forbidden")
 	}
 
-	// 8. Handler Endpoints
+	// 7. Handler Endpoints
 	// Handler ListRoles
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/roles", nil)
 	w := httptest.NewRecorder()
@@ -276,57 +214,58 @@ func TestRoleServiceAndHandler(t *testing.T) {
 		t.Errorf("expected 200 for GetRoleByID, got %d", w.Code)
 	}
 
-	// Handler CreateRole
+	// Handler ListModules
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/modules", nil)
+	w = httptest.NewRecorder()
+	handler.ListModules(w, req)
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 for ListModules, got %d", w.Code)
+	}
+
+	// Handler CreateRole (forbidden)
 	createBody, _ := json.Marshal(CreateRoleParams{
-		Name:        fmt.Sprintf("h_role_%d", time.Now().UnixNano()),
+		Name:        roleName,
 		DisplayName: "Handler Role",
 	})
 	req = httptest.NewRequest(http.MethodPost, "/api/v1/roles", bytes.NewReader(createBody))
 	req = req.WithContext(rbac.WithPrincipal(req.Context(), superActor))
 	w = httptest.NewRecorder()
 	handler.CreateRole(w, req)
-	if w.Code != http.StatusCreated {
-		t.Errorf("expected 201 for handler CreateRole, got %d", w.Code)
+	if w.Code != http.StatusForbidden {
+		t.Errorf("expected 403 for handler CreateRole, got %d", w.Code)
 	}
-	var resp struct {
-		Data Role `json:"data"`
-	}
-	_ = json.Unmarshal(w.Body.Bytes(), &resp)
-	hRoleID := resp.Data.ID
 
-	// Handler UpdateRole
+	// Handler UpdateRole (forbidden)
 	updateBody, _ := json.Marshal(UpdateRoleParams{
 		DisplayName: &newDN,
 	})
-	rCtx = chi.NewRouteContext()
-	rCtx.URLParams.Add("id", hRoleID.String())
-	req = httptest.NewRequest(http.MethodPatch, "/api/v1/roles/"+hRoleID.String(), bytes.NewReader(updateBody)).
+	req = httptest.NewRequest(http.MethodPatch, "/api/v1/roles/"+superRole.ID.String(), bytes.NewReader(updateBody)).
 		WithContext(context.WithValue(context.Background(), chi.RouteCtxKey, rCtx))
 	w = httptest.NewRecorder()
 	handler.UpdateRole(w, req)
-	if w.Code != http.StatusOK {
-		t.Errorf("expected 200 for handler UpdateRole, got %d", w.Code)
+	if w.Code != http.StatusForbidden {
+		t.Errorf("expected 403 for handler UpdateRole, got %d", w.Code)
 	}
 
-	// Handler AssignPermissions
+	// Handler AssignPermissions (forbidden)
 	assignBody, _ := json.Marshal(AssignPermissionsRequest{
 		PermissionIDs: permIDs,
 	})
-	req = httptest.NewRequest(http.MethodPut, "/api/v1/roles/"+hRoleID.String()+"/permissions", bytes.NewReader(assignBody)).
+	req = httptest.NewRequest(http.MethodPut, "/api/v1/roles/"+superRole.ID.String()+"/permissions", bytes.NewReader(assignBody)).
 		WithContext(context.WithValue(rbac.WithPrincipal(context.Background(), superActor), chi.RouteCtxKey, rCtx))
 	w = httptest.NewRecorder()
 	handler.AssignPermissions(w, req)
-	if w.Code != http.StatusOK {
-		t.Errorf("expected 200 for handler AssignPermissions, got %d", w.Code)
+	if w.Code != http.StatusForbidden {
+		t.Errorf("expected 403 for handler AssignPermissions, got %d", w.Code)
 	}
 
-	// Handler DeleteRole
-	req = httptest.NewRequest(http.MethodDelete, "/api/v1/roles/"+hRoleID.String(), nil).
+	// Handler DeleteRole (forbidden)
+	req = httptest.NewRequest(http.MethodDelete, "/api/v1/roles/"+superRole.ID.String(), nil).
 		WithContext(context.WithValue(context.Background(), chi.RouteCtxKey, rCtx))
 	w = httptest.NewRecorder()
 	handler.DeleteRole(w, req)
-	if w.Code != http.StatusNoContent {
-		t.Errorf("expected 204 for handler DeleteRole, got %d", w.Code)
+	if w.Code != http.StatusForbidden {
+		t.Errorf("expected 403 for handler DeleteRole, got %d", w.Code)
 	}
 
 	// Handler ListPermissions (flat)

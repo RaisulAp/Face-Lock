@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../../lib/api";
 import type { Attendance, SuccessEnvelope } from "../../../types/api";
@@ -17,6 +18,7 @@ import { Button } from "../../../components/ui/Button";
 import { Clock, Filter, Eye } from "lucide-react";
 
 export function AttendanceListPage() {
+  const { t } = useTranslation(["attendance", "common"]);
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(20);
   const [statusFilter, setStatusFilter] = useState<string>("");
@@ -116,10 +118,10 @@ export function AttendanceListPage() {
       <div>
         <div className="flex items-center gap-2">
           <Clock className="w-5 h-5 text-indigo-600" />
-          <h1 className="text-xl font-bold text-gray-900">Data Riwayat Kehadiran</h1>
+          <h1 className="text-xl font-bold text-gray-900">{t("page.title", { ns: "attendance" })}</h1>
         </div>
         <p className="text-xs text-gray-500 mt-0.5">
-          Seluruh log presensi karyawan terverifikasi biometrik dan geolokasi.
+          {t("page.subtitle", { ns: "attendance" })}
         </p>
       </div>
 

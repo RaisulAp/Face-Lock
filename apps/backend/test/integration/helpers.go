@@ -241,6 +241,7 @@ func SetupTestApp(t *testing.T) *TestApp {
 			RoleDelete:            roleHandler.DeleteRole,
 			RoleAssignPermissions: roleHandler.AssignPermissions,
 			PermissionList:        roleHandler.ListPermissions,
+			ModuleList:            roleHandler.ListModules,
 			SettingsList:          settingsHandler.List,
 			SettingsGetByKey:      settingsHandler.GetByKey,
 			SettingsUpdate:        settingsHandler.Update,

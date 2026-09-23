@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import {
     Users,
     Shield,
@@ -39,6 +40,7 @@ export function UserDetailModal({
     canManageRoles,
     canResetPassword,
 }: UserDetailModalProps) {
+    const { t } = useTranslation(["user", "common"]);
     if (!user) return null;
 
     // Find user's role objects
@@ -53,7 +55,7 @@ export function UserDetailModal({
         <Modal
             open={open}
             onClose={onClose}
-            title="Rincian Akun Pengguna"
+            title={t("detail.title", { ns: "user" })}
             description="Informasi lengkap identitas login, relasi karyawan, dan konfigurasi hak akses."
             maxWidth="lg"
         >

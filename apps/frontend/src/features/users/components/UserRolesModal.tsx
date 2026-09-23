@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Lock, AlertCircle, Shield } from "lucide-react";
 import type { User, Role } from "../../../types/api";
 import { Modal } from "../../../components/ui/Modal";
@@ -24,6 +25,7 @@ export function UserRolesModal({
     isSubmitting,
     isSuperAdmin,
 }: UserRolesModalProps) {
+    const { t } = useTranslation(["user", "common"]);
     const [selectedRoleId, setSelectedRoleId] = useState<string>("");
     const [error, setError] = useState<string | null>(null);
 
@@ -79,7 +81,7 @@ export function UserRolesModal({
         <Modal
             open={open}
             onClose={onClose}
-            title={`Kelola Peran Akses: ${user?.email}`}
+            title={`${t("roles.title", { ns: "user" })}: ${user?.email}`}
             description="Tentukan peran akses sistem (RBAC) untuk akun ini. Setiap pengguna wajib memiliki tepat 1 peran akses sistem."
             maxWidth="lg"
         >

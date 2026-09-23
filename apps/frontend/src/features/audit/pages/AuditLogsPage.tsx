@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../../lib/api";
 import type { AuditLogItem, PaginatedResponse } from "../../../types/api";
@@ -12,6 +13,7 @@ import { LocalTime } from "../../../components/domain/LocalTime";
 import { FileText, Eye } from "lucide-react";
 
 export function AuditLogsPage() {
+  const { t } = useTranslation(["audit", "common"]);
   const [page, setPage] = useState(1);
   const [action, setAction] = useState("");
   const [resourceType, setResourceType] = useState("");
@@ -41,11 +43,10 @@ export function AuditLogsPage() {
       <div>
         <div className="flex items-center gap-2">
           <FileText className="w-5 h-5 text-indigo-600" />
-          <h1 className="text-xl font-bold text-gray-900">Jejak Audit Sistem (Audit Logs)</h1>
+          <h1 className="text-xl font-bold text-gray-900">{t("page.title", { ns: "audit" })}</h1>
         </div>
         <p className="text-xs text-gray-500 mt-0.5">
-          Catatan tidak dapat diubah (append-only) dari setiap aktivitas mutasi data dan perubahan konfigurasi
-          sistem.
+          {t("page.subtitle", { ns: "audit" })}
         </p>
       </div>
 

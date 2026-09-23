@@ -57,6 +57,7 @@ var RouteRegistry = map[string]RouteGuard{
 	"DELETE /api/v1/roles/{id}":          "role.delete",
 	"PUT /api/v1/roles/{id}/permissions": "role.assign_permission",
 	"GET /api/v1/permissions":            "permission.read",
+	"GET /api/v1/modules":                "permission.read",
 
 	// #28 - #30, #73: Settings Endpoints
 	"GET /api/v1/settings/face-quality-status": "settings.read",
